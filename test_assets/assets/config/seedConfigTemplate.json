@@ -1,0 +1,151 @@
+{
+    "_woodProviders": [
+        {
+          "synonym": "core",
+          "filename": "config1.json"   
+        }
+    ],
+    comments: [
+        "Das ist ein Json Config Datei.",
+        "Das ist ein Template fuer seed-test.",
+    ],
+    mainLogging: {
+         level: 10,
+         path: "seeddata/status/"
+    },
+    profiles: [
+        {
+            profile: "main",
+            comments: [
+                "Das ist das main Profile.",
+                "Im Moment ist das auch das einzige Profile, das verwendet wird."
+            ],
+            profileLogging: {
+                path: "seeddata/status/"
+            },
+            features: [
+                {
+                    feature: "ollama",
+                    comments: [
+                        "In diesem Abschnitt wird die Verbindung mit Ollama beschrieben.",
+                        "host1, host2, host3 werden in dieser Reihenfolgen untersucht,",
+                        "das ermoeglicht ein Config fuer localhost und fuer Docker."
+                    ], 
+                    settings: {
+                        host1: "http://localhost",
+                        host2: "http://host.docker.internal",
+                        host3: ""
+                        port: 11434
+                    }
+                },{
+                    feature: "prompt",
+                    comments: [
+                        "In diesem Abschnitt wird das Prompting mit Ollama beschrieben.",
+                        "In hedem Prompt wird #body#, #commands#, #dokus# und #meanings# ersetzt,",
+                        "in allen weiteren nach Prompt 0 auch #count# ersetzt."
+                    ], 
+                    settings: {
+                        incisive: "mistral",
+                        codegen: "codellama",
+                        timeoutDelay: 4
+                    }, 
+                    labels: {
+                        system0: [
+"The user sends you a description of a test.\n",
+"The description consists of one or more scenes. Each scene consists of several steps or actions.\n",
+"The first step of a scenario consists of a specification of the initial state 'given' and the last is an expectation 'then'. ",
+"If an initial state follows the expectation again, then this is the next scenario.\n",
+"\n"
+"If the user numbers the scenarios sequentially, adopt their numbering.\n",
+"If the user doesn’t count themselves, determine the number of scenarios yourself. ",
+"But if the description only contains steps of the test, i.e. it is exactly one scenario, then answer '1'. \n",
+"If you cannot recognize the scenarios, return '0'. \n",
+"But you won't confuse the steps with scenarios, you shouldn't count the steps. \n",
+"A scenario begins with one of a given condition and ends with one or more expected conditions. \n",
+"You will only respond to the user with the number of scenarios detected. "
+                        ],
+                        user0: [
+"Untersuche bitte folgende Beschreibung und gebe die Anzahl der darin enthaltenen Szenarien zurück: ",
+"###\n",
+"#body# \n"
+                        ],
+                        system1: [
+"You are a programmer and will write a simple script.\n",
+"The user will send you a comment providing a description of the script's function.\n",
+"The structure consists of three sections 'given', 'when' and 'then' in that order.\n",
+"You only answer with the Python code. You will stick to Python syntax.\n",
+"In the Python script you can only use the following commands: \n";,
+"#commands#\n\n",
+"you will only use my library and will not import any others!\n",
+"\n",
+"You will code a script. Here are the meanings of the permitted commands ",
+"from which you will address the specific requirements of the test case:\n",
+"\n",
+"#meanings#\n\n",
+"Example\n",
+"```\n",
+"# Scenario 1: Scenario name\n",
+"given-role('user')\n",
+"given-website('https://www.the_page_to_be_tested.com/use_case')\n",
+"given-title('Use Case title')\n",
+"when-hover('name of the area')\n",
+"when-textinsert('name of the input field', 'the entered content')\n",
+"when-dropdown('name of a dropdown menu', 'selected entry')\n",
+"when-checkbox('name of a checkbox', 'selected or not')\n",
+"when-radio('name of a radiobutton')\n",
+"When-button('name of a button')\n",
+"then-website('https://www.the_page_to_be_tested.com/landing_page')\n",
+"then-text('the text that should be visible')\n",
+"then-not-text('the text that should not be visible')\n",
+"```\n\n",
+"Sometimes the user also defines a background of the story in front of its scenarios.\n",
+"You will treat background as Scenario 0 and start with '# Scenario 0: Background'.\n",
+""
+                        ],
+                        user1: [
+"Untersuche bitte folgendes Beschreibung und erzeuge einen Code-Ausschnitt wie im Beispiel. ",
+"Bitte erstelle alle #count# Szenarien. Verwende nur relevante Methoden aus dem Beispiel: \n",
+"###\n",
+"#body# \n",
+"###\n"
+                        ],user1strong: [
+"Untersuche bitte folgendes Beschreibung und erzeuge einen Code-Ausschnitt wie im Beispiel. ",
+"Bitte erstelle alle #count# Szenarien. Verwende nur relevante Methoden aus dem Beispiel: \n",
+"###\n",
+"#body# \n",
+"###\n",
+"\n",
+"Du berücksichtigst alternative Begriffe für Szenario wie z.B. Geschichte, Fall, Untersuchung, Handlung, etc. \n",
+"Du benutzt keine zusätzliche Bibliothek und keinen zusätzlichen import, konsultiere das Example, du verwendest diese Befehle garantiert:\n",
+"#commands#"
+                        ],
+                        system2: [
+"You are a requirements engineer and create structured test descriptions. \n",
+"The user will give you his idea and you create a structured test description in natural language ",
+"and in the first person. \n",
+"You start each test case with 'scenario', then the name, colon, ",
+"line break and then describe the respective content in the first person from a user's perspective. ",
+"Use the following individual steps in your answer:\n",
+"#dokus#"
+                        ],
+                        user2: [
+"Untersuche bitte folgendes Idee mit #count# Szenarien und erstelle eine Testfallbeschreibung aus folgenden Text: \n",
+"'''\n Storry mit folgenden Aufgabe: ",
+"#body# \n",
+"'''"
+                        ]
+                    },
+                    enablements: {
+                        rewriteStory: true 
+                    }
+                }
+            ]
+        },{
+            profile: "other",
+            comments: [
+                "Nur ein Platzhalter fuer eine breitere Welt."
+            ],
+            features: []
+        }
+    ]
+}

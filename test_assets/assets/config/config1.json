@@ -1,0 +1,70 @@
+{
+    comments: [
+        "Das ist ein Json Config Test.",
+        "Dieser Abschnitt enthält nur die Kommentare",
+        "..."
+    ],
+    mainLogging: {
+        level: "10",
+        path: "./config/"
+    },
+    profiles: [
+        {
+            profile: "main",
+            type: "TEST",
+            comments: [
+                "In diesem Abschnitt werden die Profiles hinterlegt",
+                "ein Profile sollte 'main' oder 'default' heißen."
+            ],
+            profileLogging: {
+                level: "8",
+                path: "./config/"
+            },
+            features: [
+                {
+                    feature: "Test1",
+                    featureLogging: {
+                            level: "8",
+                            path: "./config/"
+                        },
+                    comments: [
+                        "In diesem Abschnitt wird das Feature 'Test1' beschreiben."
+                    ], 
+                    settings: {
+                        param1: "param1",
+                        param2: "param2",
+                        param3: "param3",
+                        host1: "http://localhost",
+                        host2: "http://host.docker.internal",
+                        host3: "",
+                        port: 11434
+                    }, 
+                    labels: {
+                        label1: [
+                            "label1.zeile1",
+                            "label1.zeile2"
+                        ],
+                        label2: [
+                            "label2.zeile1",
+                            "label2.zeile2"
+                        ]
+                    },
+                    enablements: {
+                        enablement1: false,
+                        enablement2: true
+                    }
+                }
+            ]
+        },{
+            profile: "other",
+            comments: [
+                "Ein weiteres Profil..."
+            ],
+            profileLogging: {
+                level: "6",
+                path: "./config/"
+            },
+            features: []
+        }
+    ]
+}

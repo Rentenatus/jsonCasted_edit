@@ -1,0 +1,58 @@
+{
+    "_woodProviders": [
+      {
+        "synonym": "save",
+        "filename": "./assets/config/testboxSave_2.json"
+      }
+    ],
+    "subsub": {
+      "_class": "ValueStringSubSub",
+      "text": "subsub",
+      "frage": true
+    },
+    "one": {
+      "_woodLink": "save::123456" 
+    },
+    "arr": [
+      {
+        "_class": "ValueSeason",
+        "season": SPRING
+      },
+      {
+        "_class": "ValueInteger",
+        "zahl": 42
+      },
+      (ValueString){ 
+        "text": "Hallo Welt"
+      }      
+    ],
+    "list": [
+      {
+        "_class": "ValueInteger",
+        "zahl": 100
+      },
+      {
+        "_class": "ValueStringSubSub",
+        "text": "Test Eintrag",
+        "frage": true
+      },
+      {
+        "_class": "ValueBoolean",
+        "frage": true
+      },
+      (ValueInteger){ 
+        "zahl": -17
+      },
+      {
+        "_class": "ValueString",
+        "text": "JSON Test"
+      },
+      {
+        "_woodLink": "save::78" 
+      },
+      {
+        "_woodLink": "save::90" 
+      }
+    ]
+
+}

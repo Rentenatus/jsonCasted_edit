@@ -1,0 +1,30 @@
+{
+    "subsub": {
+      "_class": "ValueStringSubSub",
+      "text": "subsub",
+      "frage": true
+    },
+    "one": {
+      "_woodLink": "this::123456" 
+    },
+    "arr": [
+      {
+        "_class": "ValueBoolean",
+        "_woodObjectId": "123456",
+        "frage": true
+      }
+    ],
+    "list": [
+      {
+        "_class": "ValueStringSubSub",
+        "_woodObjectId": "78", 
+        "text": "Test Eintrag 2",
+        "frage": false
+      },
+      (ValueInteger){ 
+        "_woodObjectId": "90",
+        "zahl": -42
+      }
+    ]
+
+}

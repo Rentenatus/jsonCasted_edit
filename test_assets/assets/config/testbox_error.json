@@ -1,0 +1,41 @@
+{
+    "subsub": { 
+      "text": "subsub"
+    },
+    "one": {
+      "frage": true
+    },
+    "arr": [
+      {
+        "_class": "ValueInteger",
+        "zahl": 42
+      },
+      (ValueString){ 
+        "text": "Hallo Welt"
+      },
+      {
+        "frage": false
+      }
+    ],
+    "list": [
+      {
+        "_class": "ValueInteger",
+        "zahl": 100
+      },
+      {
+        "_class": "ValueString",
+        "text": "Test Eintrag"
+      },
+      {
+        "_class": "ValueBoolean",
+        "frage": true
+      },
+      (ValueInteger){ 
+        "zahl": -17
+      },
+      {
+        "text": "JSON Test"
+      }
+    ]
+
+}
