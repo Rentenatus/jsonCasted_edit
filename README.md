@@ -155,20 +155,7 @@ EditNodeAbstract (abstract)
 
 ### Command Pattern
 
-All edits are commands:
-
-```java
-public interface EditCommand {
-    CommandResult execute() throws JsonBuildException;
-    void undo();
-    EditNodeAbstract[] getAffectedNodes();
-}
-
-public class CommandResult {
-    EditNodeAbstract[] addedNodes, updatedNodes, deletedNodes;
-    JackUpdateAction[] updateActions;  // REBUILD_AFFECTED, SELECT_ADDED, SELECT_UPDATED
-}
-```
+All edits are commands.
 
 **Available Commands:**
 - `AddNodeCommand`: Add child to parent
@@ -184,13 +171,6 @@ public class CommandResult {
 - Hierarchical structure preservation
 - Expansion state preservation (which nodes were expanded)
 - Cross-file copy/paste support
-
-```java
-ClipboardManager manager = new ClipboardManager();
-ClipboardStash stash = manager.getStash("default");
-stash.addNodes(nodes);
-stash.setExpandedNodeIds(expandedIds);
-```
 
 ### Undo/Redo Management
 
