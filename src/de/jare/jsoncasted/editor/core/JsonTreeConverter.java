@@ -7,12 +7,12 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.debug.JsonDebugLevel;
+import de.jare.jsoncasted.io.JsonParseException;
+import de.jare.jsoncasted.io.parserservice.JsonParserService;
 import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
-import de.jare.jsoncasted.parserwriter.JsonParseException;
-import de.jare.jsoncasted.parserservice.JsonParserService;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
