@@ -5,6 +5,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import static de.jare.jsoncasted.lang.JsonTerms.COLONCOLON;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -112,7 +113,7 @@ public final class EditLinkingSet {
      */
     public EditNodeObject findObjectById(String objectId) {
         Objects.requireNonNull(objectId, "objectId must not be null");
-        return objectIdMap.get(providerName + "::" + objectId);
+        return objectIdMap.get(providerName + COLONCOLON + objectId);
     }
 
     /**
@@ -137,7 +138,7 @@ public final class EditLinkingSet {
         Objects.requireNonNull(editNode, "editNode must not be null");
         String objektId = editNode.getObjektId();
         if (objektId != null && !objektId.isEmpty()) {
-            objectIdMap.put(providerName + "::" + objektId, editNode);
+            objectIdMap.put(providerName + COLONCOLON + objektId, editNode);
         }
     }
 
@@ -166,7 +167,7 @@ public final class EditLinkingSet {
         }
         String objektId = editNode.getObjektId();
         if (objektId != null && !objektId.isEmpty()) {
-            return objectIdMap.remove(providerName + "::" + objektId) != null;
+            return objectIdMap.remove(providerName + COLONCOLON + objektId) != null;
         }
         return false;
     }
@@ -230,7 +231,7 @@ public final class EditLinkingSet {
         if (objectId == null) {
             return false;
         }
-        return objectIdMap.containsKey(providerName + "::" + objectId);
+        return objectIdMap.containsKey(providerName + COLONCOLON + objectId);
     }
 
     /**
