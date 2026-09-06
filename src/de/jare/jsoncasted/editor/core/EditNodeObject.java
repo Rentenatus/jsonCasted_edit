@@ -139,14 +139,14 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     @Override
     public boolean tryAssignType(JsonModelDescriptor descriptor) {
         if (descriptor == null) {
-            setEditStatus(EDIT_STATELESS);
+            setEditStatus(EditStatus.STATELESS);
             setEditMessage(null);
             return false;
         }
 
         String name = getName();
         if (name == null || name.isEmpty()) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Object node has no name for type assignment");
             return false;
         }
@@ -159,11 +159,11 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
         if (foundType != null) {
             setJsonType(foundType);
-            setEditStatus(EDIT_OKAY);
+            setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
         } else {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Type '" + name + "' not found in model");
             return false;
         }
@@ -294,5 +294,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
         }
     }
+
+
 
 }

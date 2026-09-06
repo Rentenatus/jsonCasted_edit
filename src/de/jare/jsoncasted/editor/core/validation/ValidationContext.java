@@ -16,18 +16,18 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Context object for validation operations.
- * Holds references to the tree, model descriptor, result, and current path during validation.
+ * Context object for validation operations. Holds references to the tree, model
+ * descriptor, result, and current path during validation.
  *
  * @author Janusch Rentenatus
  */
 public class ValidationContext {
-    
+
     private final EditNodeAbstract rootNode;
     private final JsonModelDescriptor modelDescriptor;
     private final ValidationResult result;
     private final ArrayDeque<EditNode> path;
-    
+
     /**
      * Creates a new validation context.
      *
@@ -35,15 +35,15 @@ public class ValidationContext {
      * @param modelDescriptor the model descriptor to validate against
      * @param result the result object to collect diagnostics
      */
-    public ValidationContext(EditNodeAbstract rootNode, 
-                           JsonModelDescriptor modelDescriptor, 
-                           ValidationResult result) {
+    public ValidationContext(EditNodeAbstract rootNode,
+            JsonModelDescriptor modelDescriptor,
+            ValidationResult result) {
         this.rootNode = Objects.requireNonNull(rootNode, "rootNode");
         this.modelDescriptor = modelDescriptor;
         this.result = Objects.requireNonNull(result, "result");
         this.path = new ArrayDeque<>();
     }
-    
+
     /**
      * Returns the root node of the tree being validated.
      *
@@ -52,7 +52,7 @@ public class ValidationContext {
     public EditNodeAbstract getRootNode() {
         return rootNode;
     }
-    
+
     /**
      * Returns the model descriptor to validate against.
      *
@@ -61,7 +61,7 @@ public class ValidationContext {
     public JsonModelDescriptor getModelDescriptor() {
         return modelDescriptor;
     }
-    
+
     /**
      * Returns the validation result to collect diagnostics.
      *
@@ -70,17 +70,17 @@ public class ValidationContext {
     public ValidationResult getResult() {
         return result;
     }
-    
+
     /**
-     * Returns the current path in the tree as a list.
-     * The path represents the hierarchy from root to the current node.
+     * Returns the current path in the tree as a list. The path represents the
+     * hierarchy from root to the current node.
      *
      * @return unmodifiable list of nodes representing the current path
      */
     public List<EditNode> getPath() {
         return Collections.unmodifiableList(new ArrayList<>(path));
     }
-    
+
     /**
      * Returns the current path as a string representation.
      *
@@ -88,16 +88,17 @@ public class ValidationContext {
      */
     public String getPathString() {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < path.size(); i++) {
-            if (i > 0) {
+        java.util.Iterator<EditNode> iterator = path.iterator();
+        while (iterator.hasNext()) {
+            EditNode node = iterator.next();
+            if (sb.length() > 0) {
                 sb.append(" -> ");
             }
-            EditNode node = path.get(i);
             sb.append(node.getName());
         }
         return sb.toString();
     }
-    
+
     /**
      * Pushes a node onto the path (when entering a node during traversal).
      *
@@ -107,7 +108,7 @@ public class ValidationContext {
         Objects.requireNonNull(node, "node");
         path.push(node);
     }
-    
+
     /**
      * Pops a node from the path (when leaving a node during traversal).
      *
@@ -116,7 +117,7 @@ public class ValidationContext {
     public EditNode popPath() {
         return path.poll();
     }
-    
+
     /**
      * Returns the current node at the top of the path.
      *
@@ -125,14 +126,14 @@ public class ValidationContext {
     public EditNode peekPath() {
         return path.peek();
     }
-    
+
     /**
      * Clears the current path.
      */
     public void clearPath() {
         path.clear();
     }
-    
+
     /**
      * Adds a diagnostic to the result with the current path information.
      *
@@ -142,7 +143,7 @@ public class ValidationContext {
         Objects.requireNonNull(diagnostic, "diagnostic");
         result.add(diagnostic);
     }
-    
+
     /**
      * Convenience method to add an error diagnostic.
      *
@@ -154,7 +155,7 @@ public class ValidationContext {
         EditNodeDiagnostic diagnostic = EditNodeDiagnostic.error(code, message, sourceNode, modelDescriptor);
         addDiagnostic(diagnostic);
     }
-    
+
     /**
      * Convenience method to add a warning diagnostic.
      *
@@ -166,7 +167,7 @@ public class ValidationContext {
         EditNodeDiagnostic diagnostic = EditNodeDiagnostic.warning(code, message, sourceNode, modelDescriptor);
         addDiagnostic(diagnostic);
     }
-    
+
     /**
      * Convenience method to add an info diagnostic.
      *

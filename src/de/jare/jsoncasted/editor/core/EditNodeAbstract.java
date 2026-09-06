@@ -46,9 +46,9 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private final List<EditNodeAbstract> children = new ArrayList<>();
     private final List<EditNodeAbstract> sortedChildren = new ArrayList<>();
     private int cachedWeight;
-    private String editStatus;
+    private EditStatus editStatus;
     private String editMessage;
-    
+
     // Schwache Referenz zum Tree für Typzuordnung
     private EditTree editTree;
 
@@ -62,7 +62,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.rightRange = RIGHT;
         this.timesRange = ONSET;
         this.cachedWeight = 1;
-        this.editStatus = EDIT_STATELESS;
+        this.editStatus = EditStatus.STATELESS;
     }
 
     /**
@@ -77,7 +77,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.rightRange = RIGHT;
         this.timesRange = ONSET;
         this.cachedWeight = 1;
-        this.editStatus = EDIT_STATELESS;
+        this.editStatus = EditStatus.STATELESS;
     }
 
     /**
@@ -94,7 +94,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.rightRange = rightRange;
         this.timesRange = timesRange;
         this.cachedWeight = 1;
-        this.editStatus = EDIT_STATELESS;
+        this.editStatus = EditStatus.STATELESS;
     }
 
     @Override
@@ -103,17 +103,17 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     }
 
     @Override
-    public String getEditStatus() {
+    public EditStatus getEditStatus() {
         return editStatus;
     }
 
     /**
      * Sets the edit status for this node.
      *
-     * @param editStatus the new edit status (one of EDIT_STATELESS, EDIT_OKAY,
-     * EDIT_WARNING, EDIT_ERROR)
+     * @param editStatus the new edit status (one of EditStatus values)
      */
-    public void setEditStatus(String editStatus) {
+    @Override
+    public void setEditStatus(EditStatus editStatus) {
         this.editStatus = editStatus;
     }
 
@@ -127,6 +127,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      *
      * @param editMessage the edit message to set
      */
+    @Override
     public void setEditMessage(String editMessage) {
         this.editMessage = editMessage;
     }
@@ -139,7 +140,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      */
     public Map<String, JackAttribut> putEditAttributes(Map<String, JackAttribut> attributes) {
         attributes.put("|edit id", new JackAttribut("edit id", getEditId()));
-        attributes.put("|edit status", new JackAttribut("edit status", getEditStatus()));
+        attributes.put("|edit status", new JackAttribut("edit status", getEditStatus().toString()));
         attributes.put("|edit message", new JackAttribut("edit message", getEditMessage()));
         attributes.put("|child count", new JackAttribut("child count", children.size()));
         return attributes;
@@ -193,9 +194,9 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     }
 
     /**
-     * Sets the EditTree reference for this node.
-     * Used for type assignment triggering.
-     * 
+     * Sets the EditTree reference for this node. Used for type assignment
+     * triggering.
+     *
      * @param editTree the EditTree this node belongs to
      */
     void setEditTree(EditTree editTree) {
@@ -204,7 +205,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
 
     /**
      * Returns the EditTree this node belongs to.
-     * 
+     *
      * @return the EditTree, or null if not set
      */
     EditTree getEditTree() {
@@ -315,7 +316,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         }
         children.add(index, child);
         child.setParent(this);
-        
+
         // Setze die Tree-Referenz für das Kind, falls diese Node sie hat
         if (editTree != null) {
             child.setEditTree(editTree);

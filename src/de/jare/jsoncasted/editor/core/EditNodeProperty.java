@@ -177,7 +177,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     @Override
     public boolean tryAssignType(JsonModelDescriptor descriptor) {
         if (descriptor == null) {
-            setEditStatus(EDIT_STATELESS);
+            setEditStatus(EditStatus.STATELESS);
             setEditMessage(null);
             return false;
         }
@@ -185,7 +185,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         // Pruefen: Hat Parent einen JsonTypeDescriptor?
         EditNode parent = getParent();
         if (!(parent instanceof EditNodeObject)) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Cannot resolve field: parent has no type");
             return false;
         }
@@ -194,14 +194,14 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         JsonTypeDescriptor parentType = parentObject.getJsonType();
 
         if (parentType == null) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Cannot resolve field: parent has no type descriptor");
             return false;
         }
 
         String fieldName = getName();
         if (fieldName == null || fieldName.isEmpty()) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Property has no name for field assignment");
             return false;
         }
@@ -211,11 +211,11 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
 
         if (foundField != null) {
             setJsonField(foundField);
-            setEditStatus(EDIT_OKAY);
+            setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
         } else {
-            setEditStatus(EDIT_ERROR);
+            setEditStatus(EditStatus.ERROR);
             setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
             return false;
         }

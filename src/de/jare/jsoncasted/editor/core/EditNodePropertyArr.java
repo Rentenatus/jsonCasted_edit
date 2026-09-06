@@ -34,7 +34,7 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
     @Override
     public boolean tryAssignType(JsonModelDescriptor descriptor) {
         if (descriptor == null) {
-            setEditStatus(EDIT_STATELESS);
+            setEditStatus(EditStatus.STATELESS);
             setEditMessage(null);
             return false;
         }
@@ -42,7 +42,7 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
         // Pruefen: Hat Parent einen JsonTypeDescriptor?
         EditNode parent = getParent();
         if (!(parent instanceof EditNodeObject)) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Cannot resolve field: parent has no type");
             return false;
         }
@@ -51,14 +51,14 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
         JsonTypeDescriptor parentType = parentObject.getJsonType();
 
         if (parentType == null) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Cannot resolve field: parent has no type descriptor");
             return false;
         }
 
         String fieldName = getName();
         if (fieldName == null || fieldName.isEmpty()) {
-            setEditStatus(EDIT_WARNING);
+            setEditStatus(EditStatus.WARNING);
             setEditMessage("Property has no name for field assignment");
             return false;
         }
@@ -70,16 +70,16 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
             // Zusätzlich prüfen: Feld muss Array-Typ unterstützen
             if (foundField.isAsArray() || foundField.isAsListOrArray()) {
                 setJsonField(foundField);
-                setEditStatus(EDIT_OKAY);
+                setEditStatus(EditStatus.OKAY);
                 setEditMessage(null);
                 return true;
             } else {
-                setEditStatus(EDIT_ERROR);
+                setEditStatus(EditStatus.ERROR);
                 setEditMessage("Field '" + fieldName + "' in type '" + parentType.getTypeName() + "' is not an array type");
                 return false;
             }
         } else {
-            setEditStatus(EDIT_ERROR);
+            setEditStatus(EditStatus.ERROR);
             setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
             return false;
         }
