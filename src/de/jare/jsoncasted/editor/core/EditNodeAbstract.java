@@ -48,6 +48,9 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private int cachedWeight;
     private String editStatus;
     private String editMessage;
+    
+    // Schwache Referenz zum Tree für Typzuordnung
+    private EditTree editTree;
 
     /**
      * Creates a new EditNodeAbstract with a generated edit ID. Initializes with
@@ -189,6 +192,25 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.parent = parent;
     }
 
+    /**
+     * Sets the EditTree reference for this node.
+     * Used for type assignment triggering.
+     * 
+     * @param editTree the EditTree this node belongs to
+     */
+    void setEditTree(EditTree editTree) {
+        this.editTree = editTree;
+    }
+
+    /**
+     * Returns the EditTree this node belongs to.
+     * 
+     * @return the EditTree, or null if not set
+     */
+    EditTree getEditTree() {
+        return editTree;
+    }
+
     @Override
     public List<EditNode> getChildren() {
         return Collections.unmodifiableList(children);
@@ -293,6 +315,11 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         }
         children.add(index, child);
         child.setParent(this);
+        
+        // Setze die Tree-Referenz für das Kind, falls diese Node sie hat
+        if (editTree != null) {
+            child.setEditTree(editTree);
+        }
     }
 
     /**
@@ -485,6 +512,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
             synchronized (sortedChildren) {
                 sortedChildren.remove(child);
                 child.setParent(null);
+                child.setEditTree(null); // Tree-Referenz zurücksetzen
                 // Notify child that it was removed
                 child.sayOnRemoved(this);
             }

@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import java.util.List;
 import java.util.Map;
 
@@ -178,6 +179,20 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
      * @param value the value to set
      */
     default void setValue(String value) {
+    }
+
+    /**
+     * Versucht, den passenden Typ/Field aus dem Modell zuzuordnen.
+     * Setzt bei Erfolg den Deskriptor, bei Misserfolg den Edit-Status.
+     * 
+     * @param descriptor Der aktuelle JsonModelDescriptor
+     * @return true wenn Zuordnung erfolgreich, false sonst
+     */
+    default boolean tryAssignType(JsonModelDescriptor descriptor) {
+        // Standardimplementierung: OKAY, kann von Subklassen überschrieben werden
+        this.setEditStatus(EDIT_OKAY);
+        this.setEditMessage(null);
+        return true;
     }
 
     // ========== Tree structure methods ==========
