@@ -56,6 +56,7 @@ Die Validatoren-Welt folgt dem **Builder-Pattern / Visitor-Pattern** aus `jsonCa
 │  • JsonModelDescriptor-Referenz                                │
 │  • List<EditNodeDiagnostic> (Sammelstelle für Ergebnisse)       │
 │  • Aktueller Pfad im Baum (für Fehlerlokalisierung)             │
+│  • getPathString() mit Iterator-basierter Pfadkonvertierung   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼

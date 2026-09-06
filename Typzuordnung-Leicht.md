@@ -27,6 +27,20 @@ Die Typzuordnung wird automatisch bei folgenden Ereignisse ausgelöst:
 
 ## 🏗️ Implementierungsstrategie
 
+### EditStatus Enum (Neu)
+
+**Pfad:** `de.jare.jsoncasted.editor.core.EditStatus`
+
+Analog zu `EdCursor.java` implementiertes Enum für Typensicherheit:
+- **Enum-Konstanten:** `STATELESS`, `OKAY`, `WARNING`, `ERROR`
+- **Integer-Konstanten:** `STATELESS_VALUE=0`, `OKAY_VALUE=1`, `WARNING_VALUE=2`, `ERROR_VALUE=3`
+- **Utility-Methoden:** `get(String literal)`, `getByName(String name)`, `get(int value)`, `VALUES`
+- **Hilfsmethoden:** `isError()`, `isWarning()`, `isOkay()`, `isStateless()`
+
+**Migration:** Die alten String-Konstanten `EDIT_*` in `EditNode.java` sind als `@Deprecated` markiert.
+
+---
+
 ### A. EditTree-Level - Zentrale Iteration
 
 **Methode:** `EditTree.assignTypesFromModel()`
@@ -68,11 +82,11 @@ Logik:
 2. Suche: modelDescriptor.getType(name) oder modelDescriptor.getTypePerceptive(name)
 3. Wenn gefunden:
    - node.setJsonType(foundType)
-   - node.setEditStatus(EDIT_OKAY)
+   - node.setEditStatus(EditStatus.OKAY)
    - node.setEditMessage(null)
    - return true
 4. Wenn nicht gefunden:
-   - node.setEditStatus(EDIT_WARNING)
+   - node.setEditStatus(EditStatus.WARNING)
    - node.setEditMessage("Type '" + name + "' not found in model")
    - return false
 ```
@@ -82,7 +96,7 @@ Logik:
 Logik:
 1. Prüfen: Hat Parent einen JsonTypeDescriptor? (node.getParent() instanceof EditNodeObject)
 2. Wenn Parent kein EditNodeObject oder kein JsonType:
-   - node.setEditStatus(EDIT_WARNING)
+   - node.setEditStatus(EditStatus.WARNING)
    - node.setEditMessage("Cannot resolve field: parent has no type")
    - return false
 3. Wenn Parent JsonType hat:
@@ -91,11 +105,11 @@ Logik:
    - Suche: parentType.getField(fieldName)
    - Wenn gefunden:
      - node.setJsonField(foundField)
-     - node.setEditStatus(EDIT_OKAY)
+     - node.setEditStatus(EditStatus.OKAY)
      - node.setEditMessage(null)
      - return true
    - Wenn nicht gefunden:
-     - node.setEditStatus(EDIT_ERROR)  // Strengere Fehlerklasse
+     - node.setEditStatus(EditStatus.ERROR)  // Strengere Fehlerklasse
      - node.setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'")
      - return false
 ```
@@ -111,11 +125,13 @@ Logik: Wie EditNodeProperty, aber:
 
 ### C. Status-Markierung
 
-**Status-Konstanten (bereits in EditNode definiert):**
-- `EDIT_STATELESS` – Neutraler Zustand
-- `EDIT_OKAY` – ✅ Typ/Field erfolgreich zugewiesen
-- `EDIT_WARNING` – ⚠️ Typ/Field nicht gefunden, aber nicht kritisch
-- `EDIT_ERROR` – ❌ Kritisches Problem (z.B. Field existiert nicht im Parent-Typ)
+**Status-Konstanten (EditStatus Enum):**
+- `EditStatus.STATELESS` – Neutraler Zustand
+- `EditStatus.OKAY` – ✅ Typ/Field erfolgreich zugewiesen
+- `EditStatus.WARNING` – ⚠️ Typ/Field nicht gefunden, aber nicht kritisch
+- `EditStatus.ERROR` – ❌ Kritisches Problem (z.B. Field existiert nicht im Parent-Typ)
+
+**Hinweis:** Die alten String-Konstanten `EDIT_*` in `EditNode.java` sind als `@Deprecated` markiert und sollten durch `EditStatus` ersetzt werden.
 
 **Fehlermeldungen:**
 - Kurze, prägnante Nachrichten für UI-Anzeige
@@ -181,7 +197,7 @@ private void assignTypesRecursive(EditNodeAbstract node, JsonModelDescriptor des
  */
 default boolean tryAssignType(JsonModelDescriptor descriptor) {
     // Standardimplementierung: OKAY, kann von Subklassen überschrieben werden
-    this.setEditStatus(EDIT_OKAY);
+    this.setEditStatus(EditStatus.OKAY);
     this.setEditMessage(null);
     return true;
 }

@@ -33,6 +33,7 @@ Diese Implementierung fügt ein umfassendes Validierungs-Framework für die Kons
 - Enthält: `rootNode`, `modelDescriptor`, `result`, `path` (Stack für Baumtraversierung)
 - **Pfadverwaltung**: `pushPath()`, `popPath()`, `peekPath()`, `clearPath()`, `getPath()`
 - **Convenience-Methoden**: `addError()`, `addWarning()`, `addInfo()` für einfache Diagnostic-Erstellung
+- **Pfadstring-Generierung**: `getPathString()` verwendet Iterator-basierte while-Schleife zur Konvertierung des Pfades in String-Form (z.B. "root -> person -> name")
 
 ### 2. Validator-Interfaces
 

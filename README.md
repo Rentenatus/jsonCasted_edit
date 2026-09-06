@@ -53,7 +53,25 @@ The system has **three cleanly separated layers**:
 │  │  • ZERO UI dependencies                 │                    │
 │  └─────────────────────────────────────────┘                    │
 └─────────────────────────────────────────────────────────────────┘
-```
+
+---
+
+## Type Assignment & Validation
+
+### On-the-Fly Type Assignment
+
+Automatic type assignment between EditTree/EditNode hierarchy and JsonModelDescriptor:
+- **EditStatus Enum**: Type-safe status marking (`STATELESS`, `OKAY`, `WARNING`, `ERROR`)
+- **Triggers**: Node creation, moves, model changes, name/type changes
+- **Lightweight**: Minimal overhead for interactive editing
+
+### Heavy Validation Framework
+
+Comprehensive validation with detailed diagnostics:
+- **ValidationContext**: Path tracking and error collection with iterator-based path string generation
+- **ValidatorRegistry**: Pluggable validator system
+- **Severity Levels**: ERROR, WARNING, INFO
+- **Explicit Invocation**: Called before save operations, exports, or on user request
 
 ---
 
@@ -155,6 +173,7 @@ EditNodeAbstract (abstract base class)
 - `parent`: Parent node reference
 - `children`: Child node list
 - `cachedWeight`: Performance optimization for tree operations
+- **EditStatus**: Type-safe status enumeration (`STATELESS`, `OKAY`, `WARNING`, `ERROR`) for validation state
 
 **EditNodeObject** extends EditNodeAbstract with:
 - `objektValue`: The object name/value
