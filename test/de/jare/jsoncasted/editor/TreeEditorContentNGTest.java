@@ -17,6 +17,7 @@ import de.jare.jsoncasted.editor.core.EditNode;
 import de.jare.jsoncasted.editor.core.EditNodeAbstract;
 import de.jare.jsoncasted.editor.core.EditNodeObject;
 import de.jare.jsoncasted.editor.core.EditNodeProperty;
+import de.jare.jsoncasted.editor.core.EditStatus;
 import de.jare.jsoncasted.editor.core.JackAttribut;
 import java.util.HashMap;
 import java.util.Map;
@@ -455,11 +456,11 @@ public class TreeEditorContentNGTest implements ATestTools {
         EditNode treeNode3 = root.getChildAt(2);
 
         // Directly set read-only attributes
-        ((EditNodeAbstract) treeNode1).setEditStatus("okay");
+        ((EditNodeAbstract) treeNode1).setEditStatus(EditStatus.OKAY);
         ((EditNodeAbstract) treeNode1).setEditMessage("All good");
-        ((EditNodeAbstract) treeNode2).setEditStatus("warning");
+        ((EditNodeAbstract) treeNode2).setEditStatus(EditStatus.WARNING);
         ((EditNodeAbstract) treeNode2).setEditMessage("Needs attention");
-        ((EditNodeAbstract) treeNode3).setEditStatus("error");
+        ((EditNodeAbstract) treeNode3).setEditStatus(EditStatus.ERROR);
         ((EditNodeAbstract) treeNode3).setEditMessage("Critical issue");
 
         editor.clearHistory();
@@ -486,17 +487,17 @@ public class TreeEditorContentNGTest implements ATestTools {
 
         assertEquals(treeNode1.getName(), "renamed1");
         assertEquals(treeNode1.getValue(), "value1");
-        assertEquals(treeNode1.getEditStatus(), "okay");
+        assertEquals(treeNode1.getEditStatus(), EditStatus.OKAY);
         assertEquals(treeNode1.getEditMessage(), "All good");
 
         assertEquals(treeNode2.getName(), "renamed2");
         assertEquals(treeNode2.getValue(), "value2");
-        assertEquals(treeNode2.getEditStatus(), "warning");
+        assertEquals(treeNode2.getEditStatus(), EditStatus.WARNING);
         assertEquals(treeNode2.getEditMessage(), "Needs attention");
 
         assertEquals(treeNode3.getName(), "renamed3");
         assertEquals(treeNode3.getValue(), "value3");
-        assertEquals(treeNode3.getEditStatus(), "error");
+        assertEquals(treeNode3.getEditStatus(), EditStatus.ERROR);
         assertEquals(treeNode3.getEditMessage(), "Critical issue");
 
         // Verify read-only attributes are in getAttributes

@@ -8,6 +8,8 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,6 +92,12 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     @Override
     public void setName(String name) {
         this.propName = name;
+        
+        // Trigger Typzuordnung neu, falls sich der Name ändert
+        EditTree tree = getEditTree();
+        if (tree != null && tree.getJsonModelDescriptor() != null) {
+            tree.assignTypesForNode(this);
+        }
     }
 
     // ========== JsonTreeNodeData methods ==========
@@ -140,6 +148,12 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setType(JsonNodeType type) {
         this.type = type;
+        
+        // Trigger Typzuordnung neu, falls sich der Typ ändert
+        EditTree tree = getEditTree();
+        if (tree != null && tree.getJsonModelDescriptor() != null) {
+            tree.assignTypesForNode(this);
+        }
     }
 
     /**
@@ -158,6 +172,53 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setJsonField(JsonFieldDescriptor jsonField) {
         this.jsonField = jsonField;
+    }
+
+    @Override
+    public boolean tryAssignType(JsonModelDescriptor descriptor) {
+        if (descriptor == null) {
+            setEditStatus(EditStatus.STATELESS);
+            setEditMessage(null);
+            return false;
+        }
+
+        // Pruefen: Hat Parent einen JsonTypeDescriptor?
+        EditNode parent = getParent();
+        if (!(parent instanceof EditNodeObject)) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Cannot resolve field: parent has no type");
+            return false;
+        }
+
+        EditNodeObject parentObject = (EditNodeObject) parent;
+        JsonTypeDescriptor parentType = parentObject.getJsonType();
+
+        if (parentType == null) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Cannot resolve field: parent has no type descriptor");
+            return false;
+        }
+
+        String fieldName = getName();
+        if (fieldName == null || fieldName.isEmpty()) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Property has no name for field assignment");
+            return false;
+        }
+
+        // Suche nach dem Field im Parent-Typ
+        JsonFieldDescriptor foundField = parentType.getField(fieldName);
+
+        if (foundField != null) {
+            setJsonField(foundField);
+            setEditStatus(EditStatus.OKAY);
+            setEditMessage(null);
+            return true;
+        } else {
+            setEditStatus(EditStatus.ERROR);
+            setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
+            return false;
+        }
     }
 
     // ========== Factory methods ==========

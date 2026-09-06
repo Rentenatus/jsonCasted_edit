@@ -46,6 +46,9 @@ public class EditTree {
         this.root = root;
         this.weightMonitor = weightMonitor;
         rangeRelabeling(root);
+        
+        // Setze die Tree-Referenz für den Root Node
+        root.setEditTree(this);
     }
 
     /**
@@ -348,6 +351,12 @@ public class EditTree {
         } else {
             parentNode.addChild(newNode, weightMonitor);
         }
+        
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+        
         return newNode;
     }
 
@@ -363,7 +372,14 @@ public class EditTree {
      */
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, boolean asArray) {
         checkParentProps(parentNode);
-        return parentNode.addNewChild(nodeText, asArray, weightMonitor);
+        EditNodeAbstract newNode = parentNode.addNewChild(nodeText, asArray, weightMonitor);
+        
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+        
+        return newNode;
     }
 
     /**
@@ -381,7 +397,14 @@ public class EditTree {
      */
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, int index, boolean asArray) {
         checkParentProps(parentNode);
-        return parentNode.addNewChild(nodeText, index, asArray, weightMonitor);
+        EditNodeAbstract newNode = parentNode.addNewChild(nodeText, index, asArray, weightMonitor);
+        
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+        
+        return newNode;
     }
 
     /**
@@ -468,6 +491,11 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, weightMonitor);
+        
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
     }
 
     /**
@@ -481,6 +509,11 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode, int index) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, index, weightMonitor);
+        
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
     }
 
     /**
@@ -691,6 +724,51 @@ public class EditTree {
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
+        assignTypesFromModel(); // Automatische Zuordnung bei Modellwechsel
+    }
+
+    /**
+     * Weist Typen aus dem Modell allen Nodes im Baum zu. 
+     * Iteriert durch den gesamten Baum (DFS) und ruft tryAssignType() auf jedem Node auf.
+     */
+    public void assignTypesFromModel() {
+        if (jsonModelDescriptor != null) {
+            assignTypesRecursive(getRoot(), jsonModelDescriptor);
+        }
+    }
+
+    /**
+     * Rekursive Hilfsmethode zur Typzuordnung für den gesamten Baum.
+     * 
+     * @param node Der aktuelle Node
+     * @param descriptor Der JsonModelDescriptor
+     */
+    private void assignTypesRecursive(EditNodeAbstract node, JsonModelDescriptor descriptor) {
+        node.tryAssignType(descriptor);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            EditNode child = node.getChildAt(i);
+            if (child instanceof EditNodeAbstract) {
+                assignTypesRecursive((EditNodeAbstract) child, descriptor);
+            }
+        }
+    }
+
+    /**
+     * Weist Typen für einen einzelnen Node und seine Kinder zu.
+     * 
+     * @param node Der Node, für den die Typzuordnung durchgeführt werden soll
+     */
+    public void assignTypesForNode(EditNodeAbstract node) {
+        if (jsonModelDescriptor != null && node != null) {
+            node.tryAssignType(jsonModelDescriptor);
+            // Auch alle Kinder neu zuordnen, da sich möglicherweise deren Kontext geändert hat
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    assignTypesRecursive((EditNodeAbstract) child, jsonModelDescriptor);
+                }
+            }
+        }
     }
 
     /**

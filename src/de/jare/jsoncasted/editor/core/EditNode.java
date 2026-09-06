@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import java.util.List;
 import java.util.Map;
 
@@ -21,22 +22,34 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
 
     /**
      * Edit state constant indicating the node has no specific edit state.
+     *
+     * @deprecated Use {@link EditStatus#STATELESS} instead
      */
+    @Deprecated
     public final static String EDIT_STATELESS = "stateless";
 
     /**
      * Edit state constant indicating the node is in a valid state.
+     *
+     * @deprecated Use {@link EditStatus#OKAY} instead
      */
+    @Deprecated
     public final static String EDIT_OKAY = "okay";
 
     /**
      * Edit state constant indicating the node has a warning.
+     *
+     * @deprecated Use {@link EditStatus#WARNING} instead
      */
+    @Deprecated
     public final static String EDIT_WARNING = "warning";
 
     /**
      * Edit state constant indicating the node has an error.
+     *
+     * @deprecated Use {@link EditStatus#ERROR} instead
      */
+    @Deprecated
     public final static String EDIT_ERROR = "error";
 
     /**
@@ -144,17 +157,16 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     /**
      * Returns the current edit status of this node.
      *
-     * @return the edit status (one of EDIT_STATELESS, EDIT_OKAY, EDIT_WARNING,
-     * EDIT_ERROR)
+     * @return the edit status (one of EditStatus values)
      */
-    public Object getEditStatus();
+    EditStatus getEditStatus();
 
     /**
      * Returns the edit message associated with this node.
      *
      * @return the edit message, or null if none
      */
-    public Object getEditMessage();
+    String getEditMessage();
 
     /**
      * Sets the name of this node.
@@ -178,6 +190,20 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
      * @param value the value to set
      */
     default void setValue(String value) {
+    }
+
+    /**
+     * Versucht, den passenden Typ/Field aus dem Modell zuzuordnen. Setzt bei
+     * Erfolg den Deskriptor, bei Misserfolg den Edit-Status.
+     *
+     * @param descriptor Der aktuelle JsonModelDescriptor
+     * @return true wenn Zuordnung erfolgreich, false sonst
+     */
+    default boolean tryAssignType(JsonModelDescriptor descriptor) {
+        // Standardimplementierung: OKAY, kann von Subklassen überschrieben werden
+        this.setEditStatus(EditStatus.OKAY);
+        this.setEditMessage(null);
+        return true;
     }
 
     // ========== Tree structure methods ==========
@@ -283,5 +309,9 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
      */
     default void setAttributes(Map<String, JackAttribut> props) {
     }
+
+    public void setEditStatus(EditStatus editStatus);
+
+    public void setEditMessage(String object);
 
 }

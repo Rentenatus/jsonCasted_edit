@@ -30,10 +30,12 @@ The system has **three cleanly separated layers**:
 │  EDITING CORE LAYER (UI-Agnostic)                               │
 │  ┌─────────────────────────────────────────────────────┐        │
 │  │  de.jare.jsoncasted.editor.*                        │        │
+│  │  • EditTree (central tree container)                │        │
 │  │  • EditNode hierarchy (EditNodeAbstract)            │        │
 │  │  • EditCommand pattern (Add, Delete, Copy, Paste)   │        │
 │  │  • ClipboardManager (multi-stash system)            │        │
 │  │  • UndoManager (command history)                    │        │
+│  │  • Model descriptor integration (JsonModelDescriptor)│        │
 │  │  • NO Swing/UI dependencies                         │        │
 │  └─────────────────────────────────────────────────────┘        │
 │                       │                                         │
@@ -138,20 +140,69 @@ The **heart of the architecture** - all editing logic without any UI dependencie
 ### EditNode Hierarchy
 
 ```
-EditNode (interface)
+EditNode (sealed interface)
    ↑
-EditNodeAbstract (abstract)
-   ├── EditNodeProperty (leaf: name, value, type)
-   └── EditNode (container: children)
+EditNodeAbstract (abstract base class)
+   ├── EditNodeObject (container: children, JsonTypeDescriptor)
+   └── EditNodeProperty (leaf: name, value, type, JsonFieldDescriptor)
+          └── EditNodePropertyArr (array property, JsonFieldDescriptor)
 ```
 
 **EditNodeAbstract** manages:
 - `editId`: Unique identifier for undo/redo tracking
-- `leftRange`, `timesRange`: Version tracking for conflict resolution
+- `leftRange`, `rightRange`: Interval labeling for efficient tree operations
+- `timesRange`: Version tracking for conflict resolution
 - `parent`: Parent node reference
 - `children`: Child node list
+- `cachedWeight`: Performance optimization for tree operations
 
-**Key difference from JsonNode:** EditNode adds editing metadata (ID, ranges, hierarchy) that enables undo/redo, clipboard, and change tracking.
+**EditNodeObject** extends EditNodeAbstract with:
+- `objektValue`: The object name/value
+- `objektInfo`: Additional info string
+- `objektId`: Unique object identifier
+- `jsonType`: Reference to `JsonTypeDescriptor` from the model layer
+
+**EditNodeProperty** extends EditNodeAbstract with:
+- `propName`: Property name
+- `primValue`: Primitive value
+- `type`: `JsonNodeType` (NULL, STRING, NUMBER, BOOLEAN, ARRAY, OBJECT)
+- `jsonField`: Reference to `JsonFieldDescriptor` from the model layer
+
+**EditNodePropertyArr** extends EditNodeProperty for array-specific behavior.
+
+**Key difference from JsonNode:** EditNode adds editing metadata (ID, ranges, hierarchy, model references) that enables undo/redo, clipboard, change tracking, and integration with the jsonCasted type system.
+
+### EditTree - Central Tree Structure
+
+The **EditTree** class is the central container for the editable JSON tree:
+- Manages the root `EditNodeAbstract`
+- Provides fast node lookup by ID, leftRange, and timesRange
+- Maintains `EditTimes` for weight monitoring
+- Supports cross-tree reference resolution via `EditLinkingSet`
+- **Model Integration**: Contains `JsonModelDescriptor` reference for type system integration
+
+```java
+EditTree tree = new EditTree("root");
+EditNodeAbstract root = tree.getRoot();
+JsonModelDescriptor modelDescriptor = tree.getJsonModelDescriptor();
+tree.setJsonModelDescriptor(modelDescriptor);
+```
+
+### Model Descriptor Integration
+
+The editing core integrates with the jsonCasted model layer through descriptor references:
+
+| EditNode Type | Descriptor Reference | Purpose |
+|---------------|---------------------|---------|
+| EditTree | `JsonModelDescriptor` | Complete model with all type definitions |
+| EditNodeObject | `JsonTypeDescriptor` | Type information for objects |
+| EditNodeProperty | `JsonFieldDescriptor` | Field definitions and constraints |
+| EditNodePropertyArr | `JsonFieldDescriptor` | Array field definitions |
+
+The **JsonModelDescriptor** contains:
+- `JsonDefinitionsDescriptor definitionsRoot`: Hierarchical definition scopes
+- `JsonTypeDescriptor` instances: Type registry with field definitions
+- Support for repository descriptors (cross-model references)
 
 ### Command Pattern
 
@@ -215,11 +266,25 @@ Each layer has a single, well-defined responsibility:
 
 ### 4. Self-Describing Models
 
-Models can export themselves as descriptions, which can then be edited:
+Models can export themselves as descriptions, which can then be edited. The editing core maintains references to these descriptors:
+
 ```java
+// Create model descriptor from jsonCasted core
 JsonModelDescriptor descriptor = jsonModel.describe();
+
+// Set descriptor on EditTree for type-aware editing
+EditTree editTree = new EditTree("root");
+editTree.setJsonModelDescriptor(descriptor);
+
 // descriptor can be serialized, edited, version controlled
+// EditNode instances reference specific type/field descriptors
 ```
+
+**JsonDefinitionsDescriptor** provides hierarchical definition scopes:
+- Nested definition trees
+- Canonical type name registry
+- Cross-repository type resolution
+- Validation support for definition consistency
 
 ### 5. Safety First
 
@@ -234,12 +299,13 @@ JsonModelDescriptor descriptor = jsonModel.describe();
 
 | Use Case | jsonCasted Features | Editing Core Features |
 |----------|---------------------|------------------------|
-| Game Data Editing | Polymorphic types, Wood references | Undo/redo, clipboard |
-| Configuration Management | JsonModel, validation | Commands, history |
-| Plugin Systems | Whitelist construction | EditNode manipulation |
-| Modding Tools | Cross-resource references | Multi-stash clipboard |
-| AI-Generated JSON | Security, validation | Full editing pipeline |
-| EMF Alternative | WoodProvider, WoodResolver | EditNode hierarchy |
+| Game Data Editing | Polymorphic types, Wood references | Undo/redo, clipboard, EditTree |
+| Configuration Management | JsonModel, validation | Commands, history, descriptor integration |
+| Plugin Systems | Whitelist construction | EditNode manipulation, type awareness |
+| Modding Tools | Cross-resource references | Multi-stash clipboard, EditTree |
+| AI-Generated JSON | Security, validation | Full editing pipeline, model descriptors |
+| EMF Alternative | WoodProvider, WoodResolver | EditNode hierarchy, JsonModelDescriptor |
+| Type-Aware Editing | JsonTypeDescriptor, JsonFieldDescriptor | EditNodeObject/Property descriptor references |
 
 ---
 

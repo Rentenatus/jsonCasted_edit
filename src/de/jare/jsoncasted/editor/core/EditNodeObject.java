@@ -7,6 +7,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.HashMap;
 import java.util.Map;
@@ -80,6 +81,12 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     @Override
     public void setName(String name) {
         this.objektValue = name;
+        
+        // Trigger Typzuordnung neu, falls sich der Name ändert
+        EditTree tree = getEditTree();
+        if (tree != null && tree.getJsonModelDescriptor() != null) {
+            tree.assignTypesForNode(this);
+        }
     }
 
     /**
@@ -127,6 +134,39 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     public void setObjektId(String objektId) {
         this.objektId = objektId;
+    }
+
+    @Override
+    public boolean tryAssignType(JsonModelDescriptor descriptor) {
+        if (descriptor == null) {
+            setEditStatus(EditStatus.STATELESS);
+            setEditMessage(null);
+            return false;
+        }
+
+        String name = getName();
+        if (name == null || name.isEmpty()) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Object node has no name for type assignment");
+            return false;
+        }
+
+        // Suche nach dem Typ im Modell (zuerst exakt, dann perceptiv)
+        JsonTypeDescriptor foundType = descriptor.getType(name);
+        if (foundType == null) {
+            foundType = descriptor.getTypePerceptive(name);
+        }
+
+        if (foundType != null) {
+            setJsonType(foundType);
+            setEditStatus(EditStatus.OKAY);
+            setEditMessage(null);
+            return true;
+        } else {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Type '" + name + "' not found in model");
+            return false;
+        }
     }
 
     /**
@@ -254,5 +294,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
         }
     }
+
+
 
 }
