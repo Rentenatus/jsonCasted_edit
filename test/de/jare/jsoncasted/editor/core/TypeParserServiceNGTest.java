@@ -265,9 +265,21 @@ public class TypeParserServiceNGTest {
         assertNotNull(testProperty, "Should find at least one property node");
 
         // Change the property name - should trigger re-parsing
-        // Use a name that is likely to exist in the model for successful parsing
+        // First, ensure the parent has a type assigned by finding a node with a typed parent
+        // We need to find a property whose parent already has a type
+        // Let's look for a nested property that has a better chance of successful parsing
+        EditNodeProperty testPropertyWithTypedParent = findPropertyWithTypedParent(editTree.getRoot());
+        if (testPropertyWithTypedParent != null) {
+            testProperty = testPropertyWithTypedParent;
+        }
+        
+        // Use a name that exists in the model
         String oldName = testProperty.getName();
         String newName = "level"; // "level" is a valid field name in ConfigLogging
+        System.out.println("Changing property from '" + oldName + "' to '" + newName + "'");
+        System.out.println("Parent type before: " + 
+                (testProperty.getParent() instanceof EditNodeObject ? 
+                    ((EditNodeObject) testProperty.getParent()).getJsonType() : "null"));
         testProperty.setName(newName);
 
         // After name change, ParseState should be EDITED or PENDING
@@ -549,4 +561,39 @@ public class TypeParserServiceNGTest {
             printTreeWithParseStates(child, indent + "  ");
         }
     }
+
+    /**
+     * Finds a property node whose parent has a type descriptor assigned.
+     * This is useful for testing field assignment, as the parent type is needed
+     * for proper field resolution.
+     *
+     * @param node the root node to start searching from
+     * @return a property node with a typed parent, or null if none found
+     */
+    private EditNodeProperty findPropertyWithTypedParent(EditNode node) {
+        if (node instanceof EditNodeProperty) {
+            EditNodeProperty prop = (EditNodeProperty) node;
+            EditNode parent = prop.getParent();
+            if (parent instanceof EditNodeObject) {
+                EditNodeObject parentObject = (EditNodeObject) parent;
+                if (parentObject.getJsonType() != null) {
+                    return prop;
+                }
+            }
+        }
+        
+        if (node instanceof EditNodeAbstract) {
+            EditNodeAbstract absNode = (EditNodeAbstract) node;
+            for (int i = 0; i < absNode.getChildCount(); i++) {
+                EditNode child = absNode.getChildAt(i);
+                EditNodeProperty result = findPropertyWithTypedParent(child);
+                if (result != null) {
+                    return result;
+                }
+            }
+        }
+        
+        return null;
+    }
+
 }
