@@ -269,10 +269,12 @@ public class TypeParserServiceNGTest {
         String newName = "modified_" + oldName;
         testProperty.setName(newName);
 
-        // After name change, ParseState should be EDITED
+        // After name change, ParseState should be EDITED or PENDING
+        // (PENDING if the queue processor already picked it up)
         ParseState stateAfterEdit = testProperty.getParseState();
         System.out.println("State after edit: " + stateAfterEdit);
-        assertEquals(stateAfterEdit, ParseState.EDITED, "State should be EDITED after name change");
+        assertTrue(stateAfterEdit == ParseState.EDITED || stateAfterEdit == ParseState.PENDING,
+                "State should be EDITED or PENDING after name change: " + stateAfterEdit);
 
         // Wait for parsing to complete
         waitForNodeParsing(testProperty);
@@ -414,7 +416,9 @@ public class TypeParserServiceNGTest {
         
         EditNodeAbstract root = editTree.getRoot();
         ParseState rootState = root.getParseState();
-        assertEquals(rootState, ParseState.EDITED, "Root should be EDITED after full parse request");
+        // Root should be EDITED initially, but may already be PENDING if queue processor is fast
+        assertTrue(rootState == ParseState.EDITED || rootState == ParseState.PENDING,
+                "Root should be EDITED or PENDING after full parse request: " + rootState);
 
         // Wait for parsing to complete
         waitForParsingCompletion();
