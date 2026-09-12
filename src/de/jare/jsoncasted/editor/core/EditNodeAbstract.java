@@ -199,12 +199,14 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         
         // Combine all relevant factors into a single hash
         // Using Objects.hash to create a stable hash from multiple values
-        return Objects.hash(
+        // Objects.hash returns int, so we convert to long and ensure positive
+        int hash = Objects.hash(
             editId,
             name,
             value,
             childCount
-        ).hashCode() & 0xFFFFFFFFL; // Ensure positive long value
+        );
+        return (long) hash & 0xFFFFFFFFL; // Ensure positive long value
     }
 
     /**

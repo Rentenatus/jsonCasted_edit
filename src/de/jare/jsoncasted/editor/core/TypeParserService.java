@@ -6,6 +6,11 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -246,20 +251,14 @@ public class TypeParserService implements TypeParserListener {
 
     /**
      * Parses a single node and updates its type information.
-     * This is a placeholder for the actual parsing logic (to be implemented in Phase 6).
-     *
+     * 
      * <p>
-     * Current implementation:
+     * This method implements Phase 6 of the on-the-fly parser:
      * 1. Checks if node still needs parsing (hash comparison)
-     * 2. Marks as DONE to prevent re-queueing
-     * </p>
-     *
-     * <p>
-     * Future implementation (Phase 6) will:
-     * 1. Use JsonModelDescriptor to assign types
-     * 2. Handle parent type inference
-     * 3. Set EditStatus based on results
-     * 4. Trigger re-parsing of affected nodes
+     * 2. Uses JsonModelDescriptor to assign types via tryAssignType()
+     * 3. Handles parent type inference for EditNodeObject nodes
+     * 4. Sets EditStatus based on parsing results
+     * 5. Triggers re-parsing of affected nodes (children when parent type changes)
      * </p>
      *
      * @param node the node to parse
@@ -279,19 +278,131 @@ public class TypeParserService implements TypeParserListener {
             return;
         }
 
-        // Update the last parsed hash
-        node.setLastParsedHash(currentHash);
+        // Set state to PENDING to indicate parsing is in progress
+        node.setParseState(ParseState.PENDING);
 
-        // TODO: Phase 6 - Actual type parsing logic
-        // For now, just mark as DONE
-        // In the real implementation, this will:
-        // 1. Use JsonModelDescriptor to assign types
-        // 2. Handle parent type inference
-        // 3. Set EditStatus based on results
-        // 4. Trigger re-parsing of affected nodes
+        // Get the model descriptor from the tree
+        JsonModelDescriptor model = editTree.getJsonModelDescriptor();
         
+        if (model == null) {
+            // No model descriptor available - set warning status
+            node.setParseState(ParseState.DONE);
+            node.setLastParsedHash(currentHash);
+            node.setEditStatus(EditStatus.WARNING);
+            node.setEditMessage("No model descriptor available for type parsing");
+            editTree.removeFromPending(node);
+            return;
+        }
+
+        // Perform type assignment using the existing tryAssignType method
+        boolean typeAssigned = node.tryAssignType(model);
+        
+        // Update the last parsed hash after successful parsing
+        node.setLastParsedHash(currentHash);
+        
+        // Mark as DONE
         node.setParseState(ParseState.DONE);
+        
+        // For EditNodeObject: try to infer parent type based on field name
+        if (typeAssigned && node instanceof EditNodeObject) {
+            tryInferParentTypes((EditNodeObject) node, model);
+        }
+        
         editTree.removeFromPending(node);
+    }
+
+    /**
+     * Attempts to infer parent types for EditNodeObject nodes.
+     * If a child node has a unique field name in the model, and the parent has no type,
+     * the parent's type is set to the type that contains this field.
+     * 
+     * <p>
+     * This implements the automatic type derivation feature: when a field name is unique
+     * in the model and the parent node has no type, we set the parent's type and trigger
+     * re-parsing of the parent.
+     * </p>
+     *
+     * @param node the EditNodeObject that was just parsed
+     * @param model the JsonModelDescriptor to use for type lookups
+     */
+    private void tryInferParentTypes(EditNodeObject node, JsonModelDescriptor model) {
+        // Get the parent node
+        EditNode parent = node.getParent();
+        if (!(parent instanceof EditNodeObject)) {
+            return; // Parent is not an object, cannot have type descriptor
+        }
+        
+        EditNodeObject parentObject = (EditNodeObject) parent;
+        
+        // If parent already has a type, no need to infer
+        if (parentObject.getJsonType() != null) {
+            return;
+        }
+        
+        // Get the node's name (which is the field name in the parent)
+        String fieldName = node.getName();
+        if (fieldName == null || fieldName.isEmpty()) {
+            return;
+        }
+        
+        // Find all types in the model that have a field with this name
+        List<JsonTypeDescriptor> typesWithField = getTypesContainingField(model, fieldName);
+        
+        if (typesWithField.isEmpty()) {
+            // No types found with this field name
+            parentObject.setEditStatus(EditStatus.WARNING);
+            parentObject.setEditMessage("No type found containing field '" + fieldName + "'");
+            return;
+        }
+        
+        if (typesWithField.size() == 1) {
+            // Unique match - set the parent's type
+            JsonTypeDescriptor parentType = typesWithField.get(0);
+            parentObject.setJsonType(parentType);
+            parentObject.setEditStatus(EditStatus.OKAY);
+            parentObject.setEditMessage(null);
+            
+            // Mark parent as EDITED to trigger re-parsing
+            parentObject.setParseState(ParseState.EDITED);
+            editTree.addToParseQueue(parentObject);
+            
+        } else {
+            // Multiple types found - ambiguous field name
+            parentObject.setEditStatus(EditStatus.WARNING);
+            parentObject.setEditMessage("Field '" + fieldName + "' is ambiguous (found in " + 
+                    typesWithField.size() + " types)");
+        }
+    }
+
+    /**
+     * Finds all type descriptors in the model that contain a field with the specified name.
+     * This is used for parent type inference when a child node's name matches a field.
+     *
+     * @param model the JsonModelDescriptor to search
+     * @param fieldName the field name to search for
+     * @return list of JsonTypeDescriptor that have a field with the given name
+     */
+    private List<JsonTypeDescriptor> getTypesContainingField(JsonModelDescriptor model, String fieldName) {
+        List<JsonTypeDescriptor> result = new ArrayList<>();
+        
+        if (model == null || fieldName == null || fieldName.isEmpty()) {
+            return result;
+        }
+        
+        // Iterate through all types in the model
+        for (JsonTypeDescriptor type : model.getTypes()) {
+            if (type == null) {
+                continue;
+            }
+            
+            // Check if this type has a field with the specified name
+            JsonFieldDescriptor field = type.getField(fieldName);
+            if (field != null) {
+                result.add(type);
+            }
+        }
+        
+        return result;
     }
 
     // ========== TypeParserListener Implementation ==========
