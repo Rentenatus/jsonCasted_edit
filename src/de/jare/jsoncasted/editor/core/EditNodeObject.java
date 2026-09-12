@@ -80,12 +80,17 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     @Override
     public void setName(String name) {
+        String oldName = this.objektValue;
         this.objektValue = name;
         
-        // Trigger Typzuordnung neu, falls sich der Name ändert
+        // Notify parser listener about name change
         EditTree tree = getEditTree();
-        if (tree != null && tree.getJsonModelDescriptor() != null) {
-            tree.assignTypesForNode(this);
+        if (tree != null) {
+            tree.notifyNodeNameChanged(this, oldName, name);
+            // Trigger Typzuordnung neu, falls sich der Name ändert
+            if (tree.getJsonModelDescriptor() != null) {
+                tree.assignTypesForNode(this);
+            }
         }
     }
 

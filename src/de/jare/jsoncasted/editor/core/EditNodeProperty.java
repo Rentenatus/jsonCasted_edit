@@ -91,12 +91,17 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     @Override
     public void setName(String name) {
+        String oldName = this.propName;
         this.propName = name;
         
-        // Trigger Typzuordnung neu, falls sich der Name ändert
+        // Notify parser listener about name change
         EditTree tree = getEditTree();
-        if (tree != null && tree.getJsonModelDescriptor() != null) {
-            tree.assignTypesForNode(this);
+        if (tree != null) {
+            tree.notifyNodeNameChanged(this, oldName, name);
+            // Trigger Typzuordnung neu, falls sich der Name ändert
+            if (tree.getJsonModelDescriptor() != null) {
+                tree.assignTypesForNode(this);
+            }
         }
     }
 
@@ -129,7 +134,14 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
 
     @Override
     public void setValue(String value) {
+        String oldValue = this.primValue;
         this.primValue = value;
+        
+        // Notify parser listener about value change
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyNodeValueChanged(this, oldValue, value);
+        }
     }
 
     /**

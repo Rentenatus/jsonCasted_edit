@@ -27,6 +27,7 @@ public class EditTree {
     
     // On-the-Fly Parsing Infrastruktur
     private TypeParserService parserService;
+    private TypeParserListener parserListener;
     private final ConcurrentLinkedQueue<EditNodeAbstract> parseQueue = new ConcurrentLinkedQueue<>();
     private final Set<EditNodeAbstract> pendingNodes = ConcurrentHashMap.newKeySet();
 
@@ -355,14 +356,9 @@ public class EditTree {
         EditNodeAbstract newNode = template.deepCopy(regenerateEditId);
 
         if (index >= 0 && index <= parentNode.getChildCount()) {
-            parentNode.addChild(newNode, index, weightMonitor);
+            addChild(parentNode, newNode, index);
         } else {
-            parentNode.addChild(newNode, weightMonitor);
-        }
-        
-        // Automatische Typzuordnung für den neuen Node
-        if (jsonModelDescriptor != null) {
-            newNode.tryAssignType(jsonModelDescriptor);
+            addChild(parentNode, newNode);
         }
         
         return newNode;
@@ -386,6 +382,9 @@ public class EditTree {
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
+        
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
         
         return newNode;
     }
@@ -411,6 +410,9 @@ public class EditTree {
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
+        
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
         
         return newNode;
     }
@@ -504,6 +506,9 @@ public class EditTree {
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
+        
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
     }
 
     /**
@@ -522,6 +527,9 @@ public class EditTree {
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
+        
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
     }
 
     /**
@@ -536,7 +544,14 @@ public class EditTree {
      */
     public boolean removeChild(EditNodeAbstract parentNode, EditNodeAbstract child) {
         checkParentProps(parentNode);
-        return parentNode.removeChild(child);
+        boolean removed = parentNode.removeChild(child);
+        
+        // Notify parser listener about child removal
+        if (removed) {
+            notifyChildRemoved(parentNode, child);
+        }
+        
+        return removed;
     }
 
     /**
@@ -563,7 +578,7 @@ public class EditTree {
             return false;
         }
         checkMembership(parentNode);
-        return parentNode.removeChild(child);
+        return removeChild(parentNode, child);
     }
 
     /**
@@ -754,6 +769,86 @@ public class EditTree {
      */
     public void setParserService(TypeParserService parserService) {
         this.parserService = parserService;
+    }
+
+    /**
+     * Returns the TypeParserListener for this tree.
+     *
+     * @return the parser listener, or {@code null} if not set
+     */
+    public TypeParserListener getParserListener() {
+        return parserListener;
+    }
+
+    /**
+     * Sets the TypeParserListener for this tree.
+     * The listener receives notifications about node changes that require re-parsing.
+     *
+     * @param parserListener the parser listener to set
+     */
+    public void setParserListener(TypeParserListener parserListener) {
+        this.parserListener = parserListener;
+    }
+
+    /**
+     * Notifies the parser listener that a node's name has changed.
+     *
+     * @param node the node whose name was changed
+     * @param oldName the previous name (may be null)
+     * @param newName the new name
+     */
+    public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
+        if (parserListener != null) {
+            parserListener.onNodeNameChanged(node, oldName, newName);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a node's value has changed.
+     *
+     * @param node the node whose value was changed
+     * @param oldValue the previous value (may be null)
+     * @param newValue the new value (may be null)
+     */
+    public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
+        if (parserListener != null) {
+            parserListener.onNodeValueChanged(node, oldValue, newValue);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a child has been added.
+     *
+     * @param parent the parent node to which the child was added
+     * @param child the child node that was added
+     */
+    public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserListener != null) {
+            parserListener.onChildAdded(parent, child);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a child has been removed.
+     *
+     * @param parent the parent node from which the child was removed
+     * @param child the child node that was removed
+     */
+    public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserListener != null) {
+            parserListener.onChildRemoved(parent, child);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a node's type descriptor has changed.
+     *
+     * @param node the node whose type descriptor was changed
+     */
+    public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
+        if (parserListener != null) {
+            parserListener.onTypeDescriptorChanged(node);
+        }
     }
 
     /**

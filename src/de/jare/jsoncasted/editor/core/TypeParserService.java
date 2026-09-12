@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Service class for on-the-fly type parsing of EditTree nodes.
+ * Implements TypeParserListener to receive notifications about node changes.
  * 
  * <p>
  * This service uses a thread pool with 1-2 threads to process nodes from the parse queue,
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * The service:
  * <ul>
+ * <li>Implements {@link TypeParserListener} to receive change notifications</li>
  * <li>Uses a fixed thread pool (2 threads) for concurrent processing</li>
  * <li>Takes nodes from the parse queue ({@link EditTree#getParseQueue()})</li>
  * <li>Uses the tree's JsonModelDescriptor for type inference</li>
@@ -39,7 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author Janusch Rentenatus
  */
-public class TypeParserService {
+public class TypeParserService implements TypeParserListener {
 
     /**
      * Default number of threads in the parser thread pool.
@@ -103,12 +105,16 @@ public class TypeParserService {
 
     /**
      * Starts the parser service with a fixed thread pool.
+     * Also registers this service as the listener with the EditTree.
      * Each node from the queue will be processed by a thread from the pool.
      */
     public void start() {
         if (running.getAndSet(true)) {
             return; // Already running
         }
+        
+        // Register this service as the parser listener with the tree
+        editTree.setParserListener(this);
         
         // Create fixed thread pool with custom thread factory for naming
         executorService = Executors.newFixedThreadPool(
@@ -135,6 +141,9 @@ public class TypeParserService {
         if (!running.getAndSet(false)) {
             return; // Already stopped
         }
+        
+        // Unregister this service as the listener
+        editTree.setParserListener(null);
         
         if (executorService != null) {
             // Shutdown the executor service
@@ -285,13 +294,73 @@ public class TypeParserService {
         editTree.removeFromPending(node);
     }
 
+    // ========== TypeParserListener Implementation ==========
+
+    @Override
+    public void onNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
+        if (node == null) {
+            return;
+        }
+        // Name changes can affect type inference
+        // Add the node to the parse queue
+        addNodeToParseQueue(node);
+    }
+
+    @Override
+    public void onNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
+        if (node == null) {
+            return;
+        }
+        // Value changes may affect type validation
+        // Add the node to the parse queue
+        addNodeToParseQueue(node);
+    }
+
+    @Override
+    public void onChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parent == null || child == null) {
+            return;
+        }
+        // Adding a child may affect parent type inference and child type
+        // Add both parent and child to the parse queue
+        addNodeToParseQueue(parent);
+        addNodeToParseQueue(child);
+    }
+
+    @Override
+    public void onChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parent == null || child == null) {
+            return;
+        }
+        // Removing a child may affect parent type inference
+        // Add parent to the parse queue
+        addNodeToParseQueue(parent);
+    }
+
+    @Override
+    public void onTypeDescriptorChanged(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        // Type descriptor changed, need to re-parse
+        addNodeToParseQueue(node);
+    }
+
+    @Override
+    public void onRequestReparse(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        // Direct request to re-parse
+        addNodeToParseQueue(node);
+    }
+
     /**
-     * Triggers re-parsing for a node and its subtree if needed.
-     * This method can be called from the UI thread to request parsing.
+     * Helper method to add a node to the parse queue with proper state management.
      *
-     * @param node the node to re-parse
+     * @param node the node to add to the parse queue
      */
-    public void requestParse(EditNodeAbstract node) {
+    private void addNodeToParseQueue(EditNodeAbstract node) {
         if (node == null || editTree == null) {
             return;
         }
@@ -299,8 +368,20 @@ public class TypeParserService {
         // Mark as EDITED to trigger re-parsing
         node.setParseState(ParseState.EDITED);
         
-        // Add to queue
+        // Add to queue (deduplication handled by EditTree.addToParseQueue)
         editTree.addToParseQueue(node);
+    }
+
+    // ========== Public API for manual triggering ==========
+
+    /**
+     * Triggers re-parsing for a node and its subtree if needed.
+     * This method can be called from the UI thread to request parsing.
+     *
+     * @param node the node to re-parse
+     */
+    public void requestParse(EditNodeAbstract node) {
+        addNodeToParseQueue(node);
     }
 
     /**
