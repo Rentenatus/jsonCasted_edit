@@ -265,14 +265,17 @@ public class TypeParserServiceNGTest {
         assertNotNull(testProperty, "Should find at least one property node");
 
         // Change the property name - should trigger re-parsing
+        // Use a name that is likely to exist in the model for successful parsing
         String oldName = testProperty.getName();
-        String newName = "modified_" + oldName;
+        String newName = "level"; // "level" is a valid field name in ConfigLogging
         testProperty.setName(newName);
 
         // After name change, ParseState should be EDITED or PENDING
         // (PENDING if the queue processor already picked it up)
         ParseState stateAfterEdit = testProperty.getParseState();
         System.out.println("State after edit: " + stateAfterEdit);
+        System.out.println("EditStatus after edit: " + testProperty.getEditStatus() + 
+                " - " + testProperty.getEditMessage());
         assertTrue(stateAfterEdit == ParseState.EDITED || stateAfterEdit == ParseState.PENDING,
                 "State should be EDITED or PENDING after name change: " + stateAfterEdit);
 
@@ -281,7 +284,11 @@ public class TypeParserServiceNGTest {
 
         // After parsing, state should be DONE
         ParseState stateAfterParse = testProperty.getParseState();
+        EditStatus statusAfterParse = testProperty.getEditStatus();
         System.out.println("State after parse: " + stateAfterParse);
+        System.out.println("Status after parse: " + statusAfterParse + " - " + testProperty.getEditMessage());
+        // Note: If the new name doesn't match the parent type, parsing may fail
+        // In that case, the state will still be DONE but status may be WARNING or ERROR
         assertEquals(stateAfterParse, ParseState.DONE, "State should be DONE after parsing");
     }
 
