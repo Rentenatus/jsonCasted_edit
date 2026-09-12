@@ -7,6 +7,9 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Represents the editable tree structure for JSON data. Maintains a hierarchy
@@ -21,6 +24,11 @@ public class EditTree {
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
     private JsonModelDescriptor jsonModelDescriptor;
+    
+    // On-the-Fly Parsing Infrastruktur
+    private TypeParserService parserService;
+    private final ConcurrentLinkedQueue<EditNodeAbstract> parseQueue = new ConcurrentLinkedQueue<>();
+    private final Set<EditNodeAbstract> pendingNodes = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a new EditTree with a root node containing the specified text.
@@ -725,6 +733,77 @@ public class EditTree {
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
         assignTypesFromModel(); // Automatische Zuordnung bei Modellwechsel
+    }
+
+    // ========== On-the-Fly Parsing Methods ==========
+
+    /**
+     * Returns the TypeParserService for this tree.
+     *
+     * @return the parser service, or {@code null} if not initialized
+     */
+    public TypeParserService getParserService() {
+        return parserService;
+    }
+
+    /**
+     * Sets the TypeParserService for this tree.
+     * The service is responsible for on-the-fly type parsing of nodes.
+     *
+     * @param parserService the parser service to set
+     */
+    public void setParserService(TypeParserService parserService) {
+        this.parserService = parserService;
+    }
+
+    /**
+     * Returns the parse queue for this tree.
+     * Contains nodes that are waiting to be parsed.
+     *
+     * @return the parse queue (thread-safe)
+     */
+    public ConcurrentLinkedQueue<EditNodeAbstract> getParseQueue() {
+        return parseQueue;
+    }
+
+    /**
+     * Returns the set of pending nodes for deduplication.
+     *
+     * @return the pending nodes set (thread-safe)
+     */
+    public Set<EditNodeAbstract> getPendingNodes() {
+        return pendingNodes;
+    }
+
+    /**
+     * Adds a node to the parse queue if it's not already pending.
+     * This method ensures deduplication using the pendingNodes set.
+     *
+     * @param node the node to add to the parse queue
+     */
+    public void addToParseQueue(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        // Only add if not already pending (deduplication)
+        if (pendingNodes.add(node)) {
+            parseQueue.add(node);
+            // Update parse state to PENDING
+            node.setParseState(ParseState.PENDING);
+        }
+    }
+
+    /**
+     * Removes a node from the pending set and queue if present.
+     * Used when a node is being processed or needs to be re-queued.
+     *
+     * @param node the node to remove
+     */
+    public void removeFromPending(EditNodeAbstract node) {
+        if (node != null) {
+            pendingNodes.remove(node);
+            parseQueue.remove(node);
+        }
     }
 
     /**

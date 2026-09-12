@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Abstract base class for all editable JSON tree nodes. Implements EditNode
@@ -49,6 +50,10 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private EditStatus editStatus;
     private String editMessage;
 
+    // ParseState für On-the-Fly Parsing
+    private ParseState parseState = ParseState.NONE;
+    private long lastParsedHash;
+
     // Schwache Referenz zum Tree für Typzuordnung
     private EditTree editTree;
 
@@ -63,6 +68,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = ONSET;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     /**
@@ -78,6 +84,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = ONSET;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     /**
@@ -95,6 +102,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = timesRange;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     @Override
@@ -132,6 +140,82 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.editMessage = editMessage;
     }
 
+    // ========== ParseState methods ==========
+
+    /**
+     * Returns the parse state for this node.
+     *
+     * @return the parse state (one of ParseState values)
+     */
+    public ParseState getParseState() {
+        return parseState;
+    }
+
+    /**
+     * Sets the parse state for this node.
+     *
+     * @param parseState the new parse state
+     */
+    public void setParseState(ParseState parseState) {
+        this.parseState = parseState;
+    }
+
+    /**
+     * Returns the last parsed hash for this node.
+     * Used for optimization to avoid unnecessary re-parsing.
+     *
+     * @return the last parsed hash value
+     */
+    public long getLastParsedHash() {
+        return lastParsedHash;
+    }
+
+    /**
+     * Sets the last parsed hash for this node.
+     *
+     * @param lastParsedHash the hash value to set
+     */
+    public void setLastParsedHash(long lastParsedHash) {
+        this.lastParsedHash = lastParsedHash;
+    }
+
+    /**
+     * Computes a flat (non-recursive) hash for this node based on its immediate properties.
+     * This is used to detect changes that require re-parsing without traversing the entire subtree.
+     * 
+     * The hash is computed from:
+     * - editId
+     * - name
+     * - value (if present)
+     * - child count
+     *
+     * @return a hash code representing the current state of this node
+     */
+    public long computeHash() {
+        // Use name and value for content-based hashing
+        String name = getName();
+        String value = getValue();
+        int childCount = getChildCount();
+        
+        // Combine all relevant factors into a single hash
+        // Using Objects.hash to create a stable hash from multiple values
+        return Objects.hash(
+            editId,
+            name,
+            value,
+            childCount
+        ).hashCode() & 0xFFFFFFFFL; // Ensure positive long value
+    }
+
+    /**
+     * Checks if this node needs re-parsing based on its parse state.
+     *
+     * @return true if the node needs parsing (NONE or EDITED state)
+     */
+    public boolean needsParsing() {
+        return parseState == null || parseState.needsParsing();
+    }
+
     /**
      * Adds edit-related attributes to the provided map of JackAttribut objects.
      *
@@ -142,6 +226,8 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         attributes.put("|edit id", new JackAttribut("edit id", getEditId()));
         attributes.put("|edit status", new JackAttribut("edit status", getEditStatus().toString()));
         attributes.put("|edit message", new JackAttribut("edit message", getEditMessage()));
+        attributes.put("|parse state", new JackAttribut("parse state", getParseState().toString()));
+        attributes.put("|last parsed hash", new JackAttribut("last parsed hash", getLastParsedHash()));
         attributes.put("|child count", new JackAttribut("child count", children.size()));
         return attributes;
     }
