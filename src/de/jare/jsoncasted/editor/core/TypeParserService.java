@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -204,15 +205,25 @@ public class TypeParserService implements TypeParserListener {
                 EditNodeAbstract node = editTree.getParseQueue().poll();
                 
                 if (node == null) {
-                    // Queue is empty, sleep briefly to avoid busy waiting
+                    // Queue is empty, check if we should continue
+                    if (!running.get() && editTree.getParseQueue().isEmpty()) {
+                        break; // Stop if not running and queue is empty
+                    }
+                    // Sleep briefly to avoid busy waiting
                     Thread.sleep(10);
                     continue;
                 }
 
                 // Submit the node to the thread pool for parsing
                 // This allows multiple nodes to be parsed concurrently
-                if (running.get()) {
-                    executorService.submit(() -> parseNodeSafely(node));
+                if (running.get() && executorService != null && !executorService.isShutdown()) {
+                    try {
+                        executorService.submit(() -> parseNodeSafely(node));
+                    } catch (RejectedExecutionException e) {
+                        // Executor is shutting down, mark node as EDITED for retry
+                        node.setParseState(ParseState.EDITED);
+                        editTree.removeFromPending(node);
+                    }
                 } else {
                     // If service is stopping, mark as EDITED so it can be re-queued later
                     node.setParseState(ParseState.EDITED);
