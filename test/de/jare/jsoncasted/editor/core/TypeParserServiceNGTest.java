@@ -8,6 +8,8 @@ import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import de.jare.jsonconfig.def.JsonConfigDefinition;
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -16,57 +18,57 @@ import org.testng.annotations.Test;
 import static org.testng.Assert.*;
 
 /**
- * Test class for the On-the-Fly Type Parser Service (Phase 6-7).
- * Tests the automatic type parsing functionality with JsonConfigDefinition model.
+ * Test class for the On-the-Fly Type Parser Service (Phase 6-7). Tests the
+ * automatic type parsing functionality with JsonConfigDefinition model.
  *
  * @author Janusch Rentenatus
  */
 public class TypeParserServiceNGTest {
-
+    
     private EditTree editTree;
     private JsonModelDescriptor modelDescriptor;
     private TypeParserService parserService;
     private File configFile;
-
+    
     public TypeParserServiceNGTest() {
     }
-
+    
     @BeforeClass
     public static void setUpClass() throws Exception {
         System.out.println("===============================================");
         System.out.println("## Start TypeParserServiceNGTest.");
     }
-
+    
     @AfterClass
     public static void tearDownClass() throws Exception {
         System.out.println("## End TypeParserServiceNGTest.");
         System.out.println("===============================================");
     }
-
+    
     @BeforeMethod
     public void setUpMethod() throws Exception {
         // Get the model descriptor from JsonConfigDefinition
         modelDescriptor = JsonConfigDefinition.INSTANCE.getModel().getOrCreateDescriptor();
         assertNotNull(modelDescriptor, "Model descriptor should not be null");
-        
+
         // Load config1.json from test_assets
-        String testAssetsPath = "test_assets/assets/config/config1.json";
+        String testAssetsPath = "assets/config/config1.json";
         configFile = new File(testAssetsPath);
         assertTrue(configFile.exists(), "Config file should exist: " + configFile.getAbsolutePath());
-        
+
         // Load JSON file into EditTree using JsonTreeConverter
         editTree = JsonTreeConverter.fromJsonFile(configFile);
         assertNotNull(editTree, "EditTree should be created from JSON file");
-        
+
         // Set the model descriptor to the tree (this should auto-start the parser)
         editTree.setJsonModelDescriptor(modelDescriptor);
-        
+
         // Get the parser service
         parserService = editTree.getParserService();
         assertNotNull(parserService, "Parser service should be created");
         assertTrue(parserService.isRunning(), "Parser service should be running after setting model");
     }
-
+    
     @AfterMethod
     public void tearDownMethod() throws Exception {
         // Stop and cleanup
@@ -79,25 +81,32 @@ public class TypeParserServiceNGTest {
     }
 
     /**
-     * Test that the parser service starts automatically when model descriptor is set.
+     * Test that the parser service starts automatically when model descriptor
+     * is set.
      */
     @Test
     public void testParserServiceAutoStart() {
         System.out.println("\n--- Testing Parser Service Auto-Start ---");
         
-        EditTree localTree = JsonTreeConverter.fromJsonFile(configFile);
-        assertNotNull(localTree, "EditTree should be created");
-        
+        EditTree localTree = null;
+        try {
+            localTree = JsonTreeConverter.fromJsonFile(configFile);
+            assertNotNull(localTree, "EditTree should be created");
+        } catch (IOException | JsonParseException ex) {
+            Logger.getLogger(TypeParserServiceNGTest.class.getName()).log(Level.SEVERE, null, ex);
+            fail(ex.getMessage());
+        }
+
         // Initially, no parser service
         assertNull(localTree.getParserService(), "Parser service should be null initially");
-        
+
         // Set model descriptor - should auto-start parser
         localTree.setJsonModelDescriptor(modelDescriptor);
         
         TypeParserService localService = localTree.getParserService();
         assertNotNull(localService, "Parser service should be created");
         assertTrue(localService.isRunning(), "Parser service should be running");
-        
+
         // Cleanup
         localTree.close();
     }
@@ -111,15 +120,15 @@ public class TypeParserServiceNGTest {
         
         EditNodeAbstract root = editTree.getRoot();
         assertNotNull(root, "Root should not be null");
-        
+
         // Check that root has been processed (should be EDITED or PENDING initially,
         // then DONE after parsing)
         ParseState rootState = root.getParseState();
         assertNotNull(rootState, "ParseState should not be null");
-        
+
         // Wait for parsing to complete
         waitForParsingCompletion();
-        
+
         // After parsing, root should be DONE
         rootState = root.getParseState();
         System.out.println("Root ParseState: " + rootState);
@@ -133,26 +142,26 @@ public class TypeParserServiceNGTest {
     @Test
     public void testTypeAssignmentForObjectNodes() throws Exception {
         System.out.println("\n--- Testing Type Assignment for Object Nodes ---");
-        
+
         // Wait for parsing to complete
         waitForParsingCompletion();
         
         EditNodeAbstract root = editTree.getRoot();
         assertNotNull(root, "Root should not be null");
-        
+
         // The root should be an EditNodeObject with the config root type
         assertTrue(root instanceof EditNodeObject, "Root should be EditNodeObject");
         EditNodeObject rootObject = (EditNodeObject) root;
-        
+
         // Check that root has a type assigned
         JsonTypeDescriptor rootType = rootObject.getJsonType();
         System.out.println("Root type: " + (rootType != null ? rootType.getTypeName() : "null"));
-        
+
         // The root type should match ConfigRoot from JsonConfigDefinition
         if (rootType != null) {
             System.out.println("Root type assigned: " + rootType.getTypeName());
         }
-        
+
         // Check that at least some child nodes have types
         boolean hasTypedChildren = false;
         for (int i = 0; i < root.getChildCount(); i++) {
@@ -166,7 +175,7 @@ public class TypeParserServiceNGTest {
                 }
             }
         }
-        
+
         // At least the root should have type information or children should have types
         // (depending on the model matching)
         System.out.println("Has typed children: " + hasTypedChildren);
@@ -178,13 +187,13 @@ public class TypeParserServiceNGTest {
     @Test
     public void testFieldAssignmentForPropertyNodes() throws Exception {
         System.out.println("\n--- Testing Field Assignment for Property Nodes ---");
-        
+
         // Wait for parsing to complete
         waitForParsingCompletion();
         
         EditNodeAbstract root = editTree.getRoot();
         assertNotNull(root, "Root should not be null");
-        
+
         // Find property nodes and check their field assignments
         boolean hasFieldAssignments = false;
         for (int i = 0; i < root.getChildCount(); i++) {
@@ -199,11 +208,11 @@ public class TypeParserServiceNGTest {
                     // Check EditStatus for properties without field assignment
                     EditStatus status = propNode.getEditStatus();
                     String message = propNode.getEditMessage();
-                    System.out.println("Property '" + propNode.getName() + "' status: " + status + 
-                            (message != null ? " - " + message : ""));
+                    System.out.println("Property '" + propNode.getName() + "' status: " + status
+                            + (message != null ? " - " + message : ""));
                 }
             }
-            
+
             // Recursively check children
             if (child instanceof EditNodeAbstract) {
                 hasFieldAssignments = checkPropertyAssignments((EditNodeAbstract) child) || hasFieldAssignments;
@@ -212,7 +221,7 @@ public class TypeParserServiceNGTest {
         
         System.out.println("Has field assignments: " + hasFieldAssignments);
     }
-
+    
     private boolean checkPropertyAssignments(EditNodeAbstract node) {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
@@ -242,7 +251,7 @@ public class TypeParserServiceNGTest {
         
         EditNodeAbstract root = editTree.getRoot();
         assertNotNull(root, "Root should not be null");
-        
+
         // Get the first child that is an EditNodeProperty
         EditNodeProperty testProperty = null;
         for (int i = 0; i < root.getChildCount(); i++) {
@@ -254,20 +263,20 @@ public class TypeParserServiceNGTest {
         }
         
         assertNotNull(testProperty, "Should find at least one property node");
-        
+
         // Change the property name - should trigger re-parsing
         String oldName = testProperty.getName();
         String newName = "modified_" + oldName;
         testProperty.setName(newName);
-        
+
         // After name change, ParseState should be EDITED
         ParseState stateAfterEdit = testProperty.getParseState();
         System.out.println("State after edit: " + stateAfterEdit);
         assertEquals(stateAfterEdit, ParseState.EDITED, "State should be EDITED after name change");
-        
+
         // Wait for parsing to complete
         waitForNodeParsing(testProperty);
-        
+
         // After parsing, state should be DONE
         ParseState stateAfterParse = testProperty.getParseState();
         System.out.println("State after parse: " + stateAfterParse);
@@ -280,13 +289,13 @@ public class TypeParserServiceNGTest {
     @Test
     public void testEditStatusAssignment() throws Exception {
         System.out.println("\n--- Testing EditStatus Assignment ---");
-        
+
         // Wait for parsing to complete
         waitForParsingCompletion();
         
         EditNodeAbstract root = editTree.getRoot();
         assertNotNull(root, "Root should not be null");
-        
+
         // Check EditStatus for various nodes
         int okayCount = 0;
         int warningCount = 0;
@@ -298,8 +307,8 @@ public class TypeParserServiceNGTest {
             EditStatus status = child.getEditStatus();
             String message = child.getEditMessage();
             
-            System.out.println("Node '" + child.getName() + "' status: " + status + 
-                    (message != null ? " - " + message : ""));
+            System.out.println("Node '" + child.getName() + "' status: " + status
+                    + (message != null ? " - " + message : ""));
             
             switch (status) {
                 case OKAY:
@@ -317,11 +326,11 @@ public class TypeParserServiceNGTest {
             }
         }
         
-        System.out.println("Status counts - OKAY: " + okayCount + ", WARNING: " + warningCount + 
-                ", ERROR: " + errorCount + ", STATELESS: " + statelessCount);
-        
+        System.out.println("Status counts - OKAY: " + okayCount + ", WARNING: " + warningCount
+                + ", ERROR: " + errorCount + ", STATELESS: " + statelessCount);
+
         // At least some nodes should be OKAY or have meaningful status
-        assertTrue(okayCount + warningCount + errorCount > 0, 
+        assertTrue(okayCount + warningCount + errorCount > 0,
                 "Should have at least one node with non-STATELESS status");
     }
 
@@ -333,21 +342,21 @@ public class TypeParserServiceNGTest {
         System.out.println("\n--- Testing Parser Queue Processing ---");
         
         assertNotNull(parserService, "Parser service should not be null");
-        
+
         // Get initial queue state
         int initialQueueSize = parserService.getQueuedTaskCount();
         System.out.println("Initial queue size: " + initialQueueSize);
-        
+
         // Wait for queue to be processed
         waitForQueueEmpty();
-        
+
         // Queue should be empty or near empty after processing
         int finalQueueSize = parserService.getQueuedTaskCount();
         System.out.println("Final queue size: " + finalQueueSize);
-        
+
         // Trigger a full re-parse
         editTree.triggerFullReparse();
-        
+
         // Queue should have items again
         int afterReparseQueueSize = parserService.getQueuedTaskCount();
         System.out.println("Queue size after re-parse: " + afterReparseQueueSize);
@@ -373,22 +382,23 @@ public class TypeParserServiceNGTest {
         }
         
         assertNotNull(firstChild, "Should find at least one child node");
-        
+
         // Reset the parse state
         firstChild.setParseState(ParseState.NONE);
-        
+
         // Request manual parse
         parserService.requestParse(firstChild);
-        
-        // State should be EDITED initially
-        assertEquals(firstChild.getParseState(), ParseState.EDITED, 
-                "State should be EDITED after parse request");
-        
+
+        // State should be PENDING (node is added to queue and state is set to PENDING)
+        // Note: addToParseQueue sets state to PENDING when adding to the queue
+        assertEquals(firstChild.getParseState(), ParseState.PENDING,
+                "State should be PENDING after parse request (node is in queue)");
+
         // Wait for parsing to complete
         waitForNodeParsing(firstChild);
-        
+
         // State should be DONE after parsing
-        assertEquals(firstChild.getParseState(), ParseState.DONE, 
+        assertEquals(firstChild.getParseState(), ParseState.DONE,
                 "State should be DONE after parsing");
     }
 
@@ -398,17 +408,17 @@ public class TypeParserServiceNGTest {
     @Test
     public void testFullParseRequest() throws Exception {
         System.out.println("\n--- Testing Full Parse Request ---");
-        
+
         // Mark all nodes as needing re-parse
         editTree.triggerFullReparse();
         
         EditNodeAbstract root = editTree.getRoot();
         ParseState rootState = root.getParseState();
         assertEquals(rootState, ParseState.EDITED, "Root should be EDITED after full parse request");
-        
+
         // Wait for parsing to complete
         waitForParsingCompletion();
-        
+
         // Check that root is now DONE
         rootState = root.getParseState();
         assertEquals(rootState, ParseState.DONE, "Root should be DONE after full parse");
@@ -422,10 +432,10 @@ public class TypeParserServiceNGTest {
         System.out.println("\n--- Testing Close Stops Parser ---");
         
         assertTrue(parserService.isRunning(), "Parser should be running initially");
-        
+
         // Close the tree
         editTree.close();
-        
+
         // Parser should be stopped
         // Note: parserService reference might be null after close, so we need to check via tree
         EditTree closedTree = editTree; // Save reference before it's cleared
@@ -433,7 +443,6 @@ public class TypeParserServiceNGTest {
     }
 
     // ========== Helper Methods ==========
-
     /**
      * Waits for the parse queue to be empty (or timeout after 5 seconds).
      */
@@ -454,7 +463,8 @@ public class TypeParserServiceNGTest {
     }
 
     /**
-     * Waits for a specific node to be parsed (ParseState.DONE or timeout after 5 seconds).
+     * Waits for a specific node to be parsed (ParseState.DONE or timeout after
+     * 5 seconds).
      */
     private void waitForNodeParsing(EditNodeAbstract node) {
         long startTime = System.currentTimeMillis();
@@ -503,10 +513,10 @@ public class TypeParserServiceNGTest {
      * Prints the tree structure with parse states and edit statuses.
      */
     private void printTreeWithParseStates(EditNode node, String indent) {
-        String nodeInfo = node.getClass().getSimpleName() +
-                "[name=" + node.getName() +
-                ", value=" + node.getValue() +
-                ", type=" + node.getTypeKey() + "]";
+        String nodeInfo = node.getClass().getSimpleName()
+                + "[name=" + node.getName()
+                + ", value=" + node.getValue()
+                + ", type=" + node.getTypeKey() + "]";
         
         String parseInfo = "";
         String statusInfo = "";
