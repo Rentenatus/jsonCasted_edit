@@ -59,9 +59,33 @@ public class TypeParserServiceNGTest {
         // Load JSON file into EditTree using JsonTreeConverter
         editTree = JsonTreeConverter.fromJsonFile(configFile);
         assertNotNull(editTree, "EditTree should be created from JSON file");
-
+        
+        // Set the root name to match the model's root class name for better type assignment
+        // The model expects "ConfigRoot" as the root type
+        String rootClassName = JsonConfigDefinition.INSTANCE.getRootClass().getTypeName();
+        System.out.println("Model root class name: " + rootClassName);
+        EditNodeAbstract root = editTree.getRoot();
+        System.out.println("Original root name: " + root.getName());
+        
+        // Rename root to match model's root class name
+        if (!root.getName().equals(rootClassName)) {
+            System.out.println("Renaming root to: " + rootClassName);
+            root.setName(rootClassName);
+        }
+        
         // Set the model descriptor to the tree (this should auto-start the parser)
         editTree.setJsonModelDescriptor(modelDescriptor);
+        
+        // Wait for initial parsing to complete before running tests
+        waitForParsingCompletion();
+        
+        // Print root type after initial parsing
+        if (root instanceof EditNodeObject) {
+            EditNodeObject rootObject = (EditNodeObject) root;
+            JsonTypeDescriptor rootType = rootObject.getJsonType();
+            System.out.println("Root type after initial parse: " + 
+                    (rootType != null ? rootType.getTypeName() : "null"));
+        }
 
         // Get the parser service
         parserService = editTree.getParserService();
