@@ -58,6 +58,28 @@ public class EditTree {
         
         // Setze die Tree-Referenz für den Root Node
         root.setEditTree(this);
+        
+        // Initialisiere den ParseState für alle Knoten auf NONE
+        initializeParseStates(root);
+    }
+
+    /**
+     * Initialisiert den ParseState für alle Knoten im Baum auf NONE.
+     * Wird beim Erstellen des Baums aufgerufen.
+     *
+     * @param node der Startknoten (normalerweise root)
+     */
+    private void initializeParseStates(EditNodeAbstract node) {
+        if (node != null) {
+            node.setParseState(ParseState.NONE);
+            node.setLastParsedHash(0);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    initializeParseStates((EditNodeAbstract) child);
+                }
+            }
+        }
     }
 
     /**
@@ -742,12 +764,64 @@ public class EditTree {
 
     /**
      * Sets the JsonModelDescriptor for this tree.
+     * Automatically starts the parser service if not already running.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
         assignTypesFromModel(); // Automatische Zuordnung bei Modellwechsel
+        
+        // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
+        startParserService();
+        
+        // Füge den Root-Knoten zur Parse-Queue hinzu, um das Parsen zu starten
+        if (parserService != null && parserService.isRunning()) {
+            // Markiere alle Knoten als EDITED, damit sie geparst werden
+            markAllNodesAsEdited(getRoot());
+            // Starte mit dem Root-Knoten
+            addToParseQueue(getRoot());
+        }
+    }
+
+    /**
+     * Startet den TypeParserService für diesen Baum, falls noch nicht gestartet.
+     * Erstellt einen neuen Service, wenn keiner existiert.
+     */
+    public void startParserService() {
+        if (parserService == null) {
+            parserService = new TypeParserService(this);
+        }
+        if (!parserService.isRunning()) {
+            parserService.start();
+        }
+    }
+
+    /**
+     * Stoppt den TypeParserService für diesen Baum.
+     */
+    public void stopParserService() {
+        if (parserService != null && parserService.isRunning()) {
+            parserService.stop();
+        }
+    }
+
+    /**
+     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing zu erzwingen.
+     *
+     * @param node der Startknoten
+     */
+    private void markAllNodesAsEdited(EditNodeAbstract node) {
+        if (node != null) {
+            node.setParseState(ParseState.EDITED);
+            node.setLastParsedHash(0);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    markAllNodesAsEdited((EditNodeAbstract) child);
+                }
+            }
+        }
     }
 
     // ========== On-the-Fly Parsing Methods ==========
@@ -764,11 +838,20 @@ public class EditTree {
     /**
      * Sets the TypeParserService for this tree.
      * The service is responsible for on-the-fly type parsing of nodes.
+     * Automatically starts the service if it's not null and not already running.
      *
      * @param parserService the parser service to set
      */
     public void setParserService(TypeParserService parserService) {
+        // Stoppen des aktuellen Services, falls vorhanden
+        if (this.parserService != null && this.parserService.isRunning()) {
+            this.parserService.stop();
+        }
         this.parserService = parserService;
+        // Automatisch starten, wenn ein neuer Service gesetzt wird
+        if (parserService != null && jsonModelDescriptor != null) {
+            parserService.start();
+        }
     }
 
     /**
@@ -955,6 +1038,46 @@ public class EditTree {
     public void rangeRelabeling(EditNodeAbstract node) {
         checkMembership(node);
         node.rangeRelabeling(weightMonitor);
+    }
+
+    // ========== On-the-Fly Parser Lifecycle Methods ==========
+
+    /**
+     * Triggers a full re-parse of the entire tree.
+     * Marks all nodes as EDITED and adds the root to the parse queue.
+     * This is useful when you want to force a complete re-evaluation of types.
+     */
+    public void triggerFullReparse() {
+        if (parserService != null && parserService.isRunning()) {
+            markAllNodesAsEdited(getRoot());
+            addToParseQueue(getRoot());
+        }
+    }
+
+    /**
+     * Closes this EditTree and releases resources.
+     * Stops the parser service and cleans up.
+     * Should be called when the tree is no longer needed.
+     */
+    public void close() {
+        stopParserService();
+        // Clear references to allow garbage collection
+        if (parserService != null) {
+            parserService.stop();
+            parserService = null;
+        }
+        parserListener = null;
+        parseQueue.clear();
+        pendingNodes.clear();
+    }
+
+    /**
+     * Returns whether the parser service is currently running.
+     *
+     * @return true if the parser service is running, false otherwise
+     */
+    public boolean isParserRunning() {
+        return parserService != null && parserService.isRunning();
     }
 
 }
