@@ -308,6 +308,21 @@ public class TypeParserService implements TypeParserListener {
         // Perform type assignment using the existing tryAssignType method
         boolean typeAssigned = node.tryAssignType(model);
         
+        // Special handling for root node: if it has no type and no parent,
+        // try to assign the JsonConfigDefinition's root type (ConfigRoot)
+        if (!typeAssigned && node instanceof EditNodeObject && node.getParent() == null) {
+            EditNodeObject rootNode = (EditNodeObject) node;
+            // For JsonConfigDefinition, the root type is "ConfigRoot"
+            de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor rootType = model.getType("ConfigRoot");
+            if (rootType != null) {
+                rootNode.setJsonType(rootType);
+                rootNode.setEditStatus(EditStatus.OKAY);
+                rootNode.setEditMessage(null);
+                typeAssigned = true;
+                System.out.println("Assigned root type (ConfigRoot) to root node");
+            }
+        }
+        
         // Update the last parsed hash after successful parsing
         node.setLastParsedHash(currentHash);
         
