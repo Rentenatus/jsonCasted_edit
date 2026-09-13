@@ -303,14 +303,15 @@ public class TypeParserServiceNGTest {
                     ((EditNodeObject) testProperty.getParent()).getJsonType() : "null"));
         testProperty.setName(newName);
 
-        // After name change, ParseState should be EDITED or PENDING
-        // (PENDING if the queue processor already picked it up)
+        // After name change, ParseState should be PENDING or DONE.
+        // PENDING: node is queued for parsing. DONE: parser already processed it.
+        // EDITED should no longer occur since addToParseQueue always sets PENDING.
         ParseState stateAfterEdit = testProperty.getParseState();
         System.out.println("State after edit: " + stateAfterEdit);
-        System.out.println("EditStatus after edit: " + testProperty.getEditStatus() + 
+        System.out.println("EditStatus after edit: " + testProperty.getEditStatus() +
                 " - " + testProperty.getEditMessage());
-        assertTrue(stateAfterEdit == ParseState.EDITED || stateAfterEdit == ParseState.PENDING,
-                "State should be EDITED or PENDING after name change: " + stateAfterEdit);
+        assertTrue(stateAfterEdit == ParseState.PENDING || stateAfterEdit == ParseState.DONE,
+                "State should be PENDING or DONE after name change: " + stateAfterEdit);
 
         // Wait for parsing to complete
         waitForNodeParsing(testProperty);
@@ -529,19 +530,19 @@ public class TypeParserServiceNGTest {
 
     /**
      * Waits for the entire tree to be parsed (timeout after 10 seconds).
+     * Checks that the parse queue is empty, no nodes are pending, and the
+     * root node has reached DONE state.
      */
     private void waitForParsingCompletion() {
         long startTime = System.currentTimeMillis();
         EditNodeAbstract root = editTree.getRoot();
 
         while (System.currentTimeMillis() - startTime < 10000) {
-            // Check if queue is empty and root is DONE.
-            // Use editTree.getParseQueue() directly because this method
-            // may be called before the parserService field is assigned.
             boolean queueEmpty = editTree.getParseQueue().isEmpty();
+            boolean pendingEmpty = editTree.getPendingNodes().isEmpty();
             boolean rootDone = root.getParseState() == ParseState.DONE;
 
-            if (queueEmpty && rootDone) {
+            if (queueEmpty && pendingEmpty && rootDone) {
                 return;
             }
 
