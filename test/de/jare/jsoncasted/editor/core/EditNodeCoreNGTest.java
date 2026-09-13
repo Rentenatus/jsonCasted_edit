@@ -1,6 +1,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import org.testng.annotations.Test;
 import static org.testng.Assert.*;
 
@@ -89,6 +90,86 @@ public class EditNodeCoreNGTest {
         assertFalse(result);
         assertEquals(node.getEditStatus(), EditStatus.WARNING);
         assertNotNull(node.getEditMessage());
+    }
+
+    // ========== castName tests ==========
+
+    @Test
+    public void testCastNameNullOnNewNode() {
+        EditNodeObject node = new EditNodeObject("test");
+        assertNull(node.getCastName(), "castName should be null on a new node");
+    }
+
+    @Test
+    public void testCastNameSetAfterSuccessfulTryAssignType() {
+        EditNodeObject node = new EditNodeObject("ConfigRoot");
+        JsonModelDescriptor descriptor = de.jare.jsonconfig.def.JsonConfigDefinition.INSTANCE
+                .getModel().getOrCreateDescriptor();
+        boolean result = node.tryAssignType(descriptor);
+        assertTrue(result);
+        assertNotNull(node.getCastName(), "castName should be set after successful type assignment");
+        assertEquals(node.getCastName(), node.getJsonType().getTypeName());
+    }
+
+    @Test
+    public void testCastNameNotSetOnFailedTryAssignType() {
+        EditNodeObject node = new EditNodeObject("nonExistent");
+        JsonModelDescriptor descriptor = de.jare.jsonconfig.def.JsonConfigDefinition.INSTANCE
+                .getModel().getOrCreateDescriptor();
+        boolean result = node.tryAssignType(descriptor);
+        assertFalse(result);
+        assertNull(node.getCastName(), "castName should remain null on failed type assignment");
+    }
+
+    @Test
+    public void testCastNameUsedAsCacheOnReparse() {
+        // Simulate: first parse resolves via getTypePerceptive, sets castName;
+        // second parse should resolve via getType(castName) — O(1).
+        EditNodeObject node = new EditNodeObject("ConfigRoot");
+        JsonModelDescriptor descriptor = de.jare.jsonconfig.def.JsonConfigDefinition.INSTANCE
+                .getModel().getOrCreateDescriptor();
+
+        // First parse
+        assertTrue(node.tryAssignType(descriptor));
+        assertNotNull(node.getCastName());
+        JsonTypeDescriptor firstType = node.getJsonType();
+
+        // Simulate re-parse: castName is set, so getType(castName) should hit
+        // Clear jsonType to simulate a fresh parse, but keep castName
+        node.setJsonType(null);
+        assertTrue(node.tryAssignType(descriptor));
+        assertEquals(node.getJsonType(), firstType,
+                "Re-parse via castName should resolve the same type");
+    }
+
+    @Test
+    public void testCastNameSurvivesDeepCopy() {
+        EditNodeObject node = new EditNodeObject("ConfigRoot");
+        node.setCastName("ConfigRoot");
+
+        EditNodeObject copy = (EditNodeObject) node.deepCopy(false);
+        assertEquals(copy.getCastName(), "ConfigRoot",
+                "castName should survive deepCopy");
+    }
+
+    @Test
+    public void testCastNameInAttributes() {
+        EditNodeObject node = new EditNodeObject("test");
+        node.setCastName("MyType");
+
+        var attrs = node.getAttributes();
+        assertTrue(attrs.containsKey("castName"));
+        assertEquals(attrs.get("castName").getValue(), "MyType");
+    }
+
+    @Test
+    public void testCastNameFromAttributes() {
+        EditNodeObject node = new EditNodeObject("test");
+        java.util.Map<String, JackAttribut> props = new java.util.HashMap<>();
+        props.put("castName", new JackAttribut("castName", "RestoredType"));
+        node.setAttributes(props);
+
+        assertEquals(node.getCastName(), "RestoredType");
     }
 
     // ========== EditNodeProperty.tryAssignType tests ==========
