@@ -57,7 +57,7 @@ public class EditValidationRunner {
         
         // If no descriptor is provided, we can only do limited validation
         if (descriptor == null) {
-            return validateWithoutModel(tree);
+            return new ValidationResult();
         }
         
         // Build the validator registry
@@ -118,7 +118,7 @@ public class EditValidationRunner {
         Objects.requireNonNull(rootNode, "rootNode");
         
         if (descriptor == null) {
-            return validateSubtreeWithoutModel(rootNode);
+            return new ValidationResult();
         }
         
         ValidatorRegistry registry = buildRegistry();
@@ -172,34 +172,6 @@ public class EditValidationRunner {
             // Always pop the path when done
             context.popPath();
         }
-    }
-    
-    /**
-     * Validates a tree without a model descriptor (limited validation).
-     * Only structural validators that don't require a model can run.
-     *
-     * @param tree the tree to validate
-     * @return the validation result
-     */
-    private ValidationResult validateWithoutModel(EditTree tree) {
-        ValidationResult result = new ValidationResult();
-        
-        // Without a model, we can only do limited validation
-        // For now, just return empty result
-        // Could be extended to do structural validation
-        
-        return result;
-    }
-    
-    /**
-     * Validates a subtree without a model descriptor.
-     *
-     * @param rootNode the root of the subtree
-     * @return the validation result
-     */
-    private ValidationResult validateSubtreeWithoutModel(EditNodeAbstract rootNode) {
-        // Similar to validateWithoutModel but for a subtree
-        return new ValidationResult();
     }
     
     /**

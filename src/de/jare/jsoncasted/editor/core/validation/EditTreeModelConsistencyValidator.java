@@ -48,7 +48,6 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         // Collect all type names used in the tree
         Set<String> usedTypeNames = new HashSet<>();
         Set<String> missingTypeNames = new HashSet<>();
-        Set<String> orphanedTypeNames = new HashSet<>();
 
         // Traverse the tree to collect all object type names
         collectObjectTypeNames(tree.getRoot(), usedTypeNames);
@@ -60,15 +59,6 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
             }
         }
 
-        // Check if all types in the model are used (optional, for completeness)
-        // This is more of an info/warning check
-        for (String modelTypeName : descriptor.getTypesKeys()) {
-            if (!usedTypeNames.contains(modelTypeName)) {
-                // This is not an error, just informational
-                // Could be added as INFO diagnostic if needed
-            }
-        }
-
         // If there are missing types, add error diagnostics
         if (!missingTypeNames.isEmpty()) {
             // Find nodes with missing types
@@ -77,13 +67,6 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
             // Also add a general tree-level diagnostic
             context.addError("editnode.tree.orphaned.types",
                     "The following types are used in the tree but not in the model: " + missingTypeNames,
-                    tree.getRoot());
-        }
-
-        // Check for general tree-model consistency
-        if (!missingTypeNames.isEmpty()) {
-            context.addError("editnode.tree.inconsistent",
-                    "Tree contains nodes with types not defined in the model",
                     tree.getRoot());
         }
     }
