@@ -188,14 +188,28 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             return false;
         }
 
-        // Suche nach dem Typ im Modell (zuerst exakt, dann perceptiv)
-        JsonTypeDescriptor foundType = descriptor.getType(name);
+        // 1. Versuch: Cached castName (O(1) HashMap-Zugriff).
+        //    Wird beim ersten erfolgreichen Parsen gesetzt und beim
+        //    Re-Parse verwendet, solange sich der Name nicht geaendert hat.
+        JsonTypeDescriptor foundType = null;
+        if (castName != null) {
+            foundType = descriptor.getType(castName);
+        }
+
+        // 2. Versuch: Exakte Suche ueber den Node-Namen.
+        if (foundType == null) {
+            foundType = descriptor.getType(name);
+        }
+
+        // 3. Versuch: Perceptive Suche (lineare Suche, Fallback).
         if (foundType == null) {
             foundType = descriptor.getTypePerceptive(name);
         }
 
         if (foundType != null) {
             setJsonType(foundType);
+            // Cache fuer den naechsten Parse-Lauf pflegen.
+            setCastName(foundType.getTypeName());
             setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
