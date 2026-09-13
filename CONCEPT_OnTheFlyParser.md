@@ -80,9 +80,9 @@ Bevor mit der Implementierung begonnen wird, müssen folgende Punkte geklärt un
 
 #### 1.1.3 vorbereitende Aufgaben
 
-- [ ] **Codebase durchsuchen**: Prüfen, ob bestehende Klassen (`EditTree`, `EditNodeAbstract`) für die Erweiterungen geeignet sind.
-- [ ] **Thread-Safety prüfen**: sicherstellen, dass `EditTree` und `EditNode`-Methoden thread-safe sind oder gemacht werden können.
-- [ ] **Build-System anpassen**: Falls neue Abhängigkeiten (z. B. `ConcurrentLinkedQueue`) benötigt werden, sicherstellen, dass diese verfügbar sind.
+- [x] **Codebase durchsuchen**: Prüfen, ob bestehende Klassen (`EditTree`, `EditNodeAbstract`) für die Erweiterungen geeignet sind.
+- [x] **Thread-Safety prüfen**: sicherstellen, dass `EditTree` und `EditNode`-Methoden thread-safe sind oder gemacht werden können. (Umgesetzt in AP-1: volatile Felder)
+- [x] **Build-System anpassen**: Falls neue Abhängigkeiten (z. B. `ConcurrentLinkedQueue`) benötigt werden, sicherstellen, dass diese verfügbar sind. (Keine neuen Abhängigkeiten benötigt)
 
 ### 1.2 Lösungsvorschlag: Vorbereitung
 
@@ -222,10 +222,10 @@ public void parseNode(EditNodeAbstract node) {
 
 ### 2.5 Aufgaben für diese Phase
 
-- [ ] `ParseState`-Enum erstellen (wie oben).
-- [ ] `EditNodeAbstract` um `parseState`-Feld erweitern.
-- [ ] `setParseState()` in allen relevanten Methoden aufrufen (z. B. `setName()`, `setValue()`).
-- [ ] Existing Code durchsuchen: Wo müssen `ParseState`-Übergänge ausgelöst werden?
+- [x] `ParseState`-Enum erstellen (wie oben).
+- [x] `EditNodeAbstract` um `parseState`-Feld erweitern.
+- [x] `setParseState()` in allen relevanten Methoden aufrufen (z. B. `setName()`, `setValue()`). (Via TypeParserListener, nicht direkt in Settern)
+- [x] Existing Code durchsuchen: Wo müssen `ParseState`-Übergänge ausgelöst werden?
 
 ---
 
@@ -255,13 +255,19 @@ Ein **flacher Hash** (nicht rekursiv) reicht aus, um zu erkennen, ob sich ein Kn
  * Wird verwendet, um zu prüfen, ob sich der Knoten seit dem letzten Parsen geändert hat.
  */
 public long computeHash() {
+    // Type-specific descriptor via instanceof dispatch (EditNodeAbstract
+    // does not declare getJsonType()/getJsonField() directly)
+    Object typeDescriptor = null;
+    if (this instanceof EditNodeObject) {
+        typeDescriptor = ((EditNodeObject) this).getJsonType();
+    } else if (this instanceof EditNodeProperty) {
+        typeDescriptor = ((EditNodeProperty) this).getJsonField();
+    }
     return Objects.hash(
         getName(),           // Name des Knotens
         getValue(),          // Wert (falls vorhanden)
-        getClass(),          // Typ des Knotens (EditNodeObject/Property)
         getChildCount(),     // Anzahl der Kinder (nicht rekursiv!)
-        getJsonType(),       // Aktueller jsonType (falls vorhanden)
-        getJsonField()       // Aktueller jsonField (falls vorhanden)
+        typeDescriptor       // jsonType oder jsonField (falls vorhanden)
     );
 }
 ```
@@ -309,10 +315,10 @@ public void parseNode(EditNodeAbstract node) {
 
 ### 3.5 Aufgaben für diese Phase
 
-- [ ] `computeHash()` in `EditNodeAbstract` implementieren.
-- [ ] `lastParsedHash` in `EditNodeAbstract` hinzufügen.
-- [ ] `lastParsedHash` in allen relevanten Setter-Methoden zurücksetzen.
-- [ ] Parser so anpassen, dass er den Hash zur Optimierung verwendet.
+- [x] `computeHash()` in `EditNodeAbstract` implementieren. (Inkl. jsonType/jsonField, AP-3)
+- [x] `lastParsedHash` in `EditNodeAbstract` hinzufügen.
+- [x] `lastParsedHash` in allen relevanten Setter-Methoden zurücksetzen. (Via markAllNodesAsEdited)
+- [x] Parser so anpassen, dass er den Hash zur Optimierung verwendet.
 
 ---
 
@@ -395,15 +401,15 @@ public class TypeParserService {
 }
 ```
 
-2. **Thread-Safety in `EditTree` und `EditNode`**:
+2. **Thread-Safety in `EditTree` und `EditNode`** (umgesetzt in AP-1):
 
 - **`EditTree`**:
-  - `parseQueue` und `pendingNodes` sind bereits thread-safe (`ConcurrentLinkedQueue`, `ConcurrentHashMap.newKeySet()`).
+  - `parseQueue` und `pendingNodes` sind thread-safe (`ConcurrentLinkedQueue`, `ConcurrentHashMap.newKeySet()`).
   - `JsonModelDescriptor` sollte **immutable** sein oder über `ReadWriteLock` geschützt werden.
 
 - **`EditNode`**:
-  - `parseState` und `lastParsedHash` können **atomar** gesetzt werden (keine komplexen Operationen).
-  - `setJsonType()` und `setJsonField()` müssen thread-safe sein (z. B. `synchronized` oder `volatile`).
+  - `parseState`, `lastParsedHash`, `editStatus`, `editMessage`, `editTree` sind als `volatile` deklariert (AP-1).
+  - `setJsonType()` und `setJsonField()` verwenden `volatile` Felder (AP-1).
 
 #### 4.3.3 Beispiel: Thread-Safety
 
@@ -430,10 +436,10 @@ public void setJsonType(JsonTypeDescriptor type) {
 
 ### 4.5 Aufgaben für diese Phase
 
-- [ ] `TypeParserService` mit `ExecutorService` implementieren.
-- [ ] `EditTree` um `parseQueue` und `pendingNodes` erweitern.
-- [ ] Thread-Safety für `EditNode`-Methoden (`setJsonType`, `setJsonField`) sicherstellen.
-- [ ] `TypeParserService` in `EditTree` integrieren und starten/stoppen.
+- [x] `TypeParserService` mit `ExecutorService` implementieren.
+- [x] `EditTree` um `parseQueue` und `pendingNodes` erweitern.
+- [x] Thread-Safety für `EditNode`-Methoden (`setJsonType`, `setJsonField`) sicherstellen. (AP-1: volatile)
+- [x] `TypeParserService` in `EditTree` integrieren und starten/stoppen.
 
 ---
 
@@ -552,10 +558,10 @@ public class TypeParserService implements TypeParserListener {
 
 ### 5.5 Aufgaben für diese Phase
 
-- [ ] `TypeParserListener`-Interface erstellen.
-- [ ] `EditTree` um Listener-Registrierung erweitern.
-- [ ] Listener-Aufrufe in `EditNode`-Methoden (`setName`, `setValue`, etc.) hinzufügen.
-- [ ] `TypeParserService` als `TypeParserListener` implementieren.
+- [x] `TypeParserListener`-Interface erstellen.
+- [x] `EditTree` um Listener-Registrierung erweitern.
+- [x] Listener-Aufrufe in `EditNode`-Methoden (`setName`, `setValue`, etc.) hinzufügen.
+- [x] `TypeParserService` als `TypeParserListener` implementieren.
 
 ---
 
@@ -660,7 +666,9 @@ public class TypeParserService {
         }
         
         // Suche nach Typen, die ein Feld mit dem Namen des Nodes haben
-        List<JsonTypeDescriptor> typesWithField = model.getTypesContainingField(node.getName());
+        // (getTypesContainingField ist eine private Methode in TypeParserService,
+        // nicht in JsonModelDescriptor)
+        List<JsonTypeDescriptor> typesWithField = getTypesContainingField(model, node.getName());
         if (typesWithField.size() == 1) {
             parentObject.setJsonType(typesWithField.get(0));
             parentObject.setParseState(ParseState.EDITED);
@@ -746,10 +754,10 @@ public boolean tryAssignType(JsonModelDescriptor descriptor) {
         return false;
     }
 
+    // Feld innerhalb des Parent-Typs aufloesen.
+    // Hinweis: getFieldPerceptive(fieldName) wurde im Konzept vorgeschlagen,
+    // ist aber nicht implementiert. Die Implementation verwendet nur getField().
     JsonFieldDescriptor foundField = parentType.getField(fieldName);
-    if (foundField == null) {
-        foundField = parentType.getFieldPerceptive(fieldName);
-    }
 
     if (foundField != null) {
         setJsonField(foundField);
@@ -766,10 +774,10 @@ public boolean tryAssignType(JsonModelDescriptor descriptor) {
 
 ### 6.4 Aufgaben für diese Phase
 
-- [ ] `TypeParserService` mit `ExecutorService` und `processQueue` implementieren.
-- [ ] `parseNode`-Methode implementieren (mit Hash-Prüfung).
-- [ ] `tryInferParentTypes`-Methode für automatische Typableitung implementieren.
-- [ ] `tryAssignType` in `EditNodeObject` und `EditNodeProperty` anpassen (falls nötig).
+- [x] `TypeParserService` mit `ExecutorService` und `processQueue` implementieren.
+- [x] `parseNode`-Methode implementieren (mit Hash-Prüfung).
+- [x] `tryInferParentTypes`-Methode für automatische Typableitung implementieren.
+- [x] `tryAssignType` in `EditNodeObject` und `EditNodeProperty` anpassen (falls nötig).
 
 ---
 
@@ -850,10 +858,10 @@ public void setJsonModelDescriptor(JsonModelDescriptor descriptor) {
 
 ### 7.3 Aufgaben für diese Phase
 
-- [ ] `TypeParserService` in `EditTree` integrieren.
-- [ ] `EditTree` als `TypeParserListener` implementieren.
-- [ ] `setJsonModelDescriptor` anpassen, um Reparsing auszulösen.
-- [ ] `startParsing()` und `stopParsing()` in `EditTree` hinzufügen.
+- [x] `TypeParserService` in `EditTree` integrieren.
+- [x] `EditTree` als `TypeParserListener` implementieren. (TypeParserService registriert sich selbst)
+- [x] `setJsonModelDescriptor` anpassen, um Reparsing auszulösen. (AP-5: nur async, keine synchrone Doppelausfuehrung)
+- [x] `startParsing()` und `stopParsing()` in `EditTree` hinzufügen. (startParserService/stopParserService)
 
 ---
 

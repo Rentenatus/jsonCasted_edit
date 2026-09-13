@@ -60,10 +60,16 @@ The system has **three cleanly separated layers**:
 
 ### On-the-Fly Type Assignment
 
-Automatic type assignment between EditTree/EditNode hierarchy and JsonModelDescriptor:
+Automatic, asynchronous type assignment between EditTree/EditNode hierarchy and JsonModelDescriptor:
+
+- **TypeParserService**: Background parser with a fixed thread pool (2 threads) that processes a parse queue
+- **ParseState Enum**: Tracks parsing state per node (`NONE`, `EDITED`, `PENDING`, `DONE`)
 - **EditStatus Enum**: Type-safe status marking (`STATELESS`, `OKAY`, `WARNING`, `ERROR`)
-- **Triggers**: Node creation, moves, model changes, name/type changes
-- **Lightweight**: Minimal overhead for interactive editing
+- **Hash-based incremental re-parsing**: `computeHash()` includes name, value, child count, and type descriptors (jsonType/jsonField) to detect changes efficiently
+- **TypeParserListener**: Interface for node change notifications (name, value, type, child add/remove) that trigger re-parsing
+- **Thread-safety**: Shared fields (`parseState`, `lastParsedHash`, `jsonType`, `jsonField`, `editStatus`, `editMessage`, `editTree`) are `volatile`
+- **Root type assignment**: Configurable via `EditTree.setRootType()` — no hardcoded type names
+- **Triggers**: Node creation, moves, model changes, name/type changes (all asynchronous via parse queue)
 
 ### Heavy Validation Framework
 
