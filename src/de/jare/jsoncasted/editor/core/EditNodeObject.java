@@ -278,6 +278,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             copy.addChildPhase1(deepCopy, copy.getChildCount());
             copy.addChildPhase2Fast(deepCopy);
         }
+        copy.setCastName(castName);
         return copy;
     }
 
@@ -312,6 +313,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("infotype", new JackAttribut("infotype", getObjektInfo()));
         attributes.put("objektId", new JackAttribut("objektId", getObjektId()));
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
+        attributes.put("castName", new JackAttribut("castName", getCastName()));
         return putEditAttributes(attributes);
     }
 
@@ -343,6 +345,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut typeAttr = props.get("jsonType");
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
+        }
+        JackAttribut castNameAttr = props.get("castName");
+        if (castNameAttr != null) {
+            setCastName((String) castNameAttr.getValue());
         }
     }
 
