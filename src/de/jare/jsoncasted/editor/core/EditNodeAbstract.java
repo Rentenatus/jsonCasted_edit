@@ -47,15 +47,15 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private final List<EditNodeAbstract> children = new ArrayList<>();
     private final List<EditNodeAbstract> sortedChildren = new ArrayList<>();
     private int cachedWeight;
-    private EditStatus editStatus;
-    private String editMessage;
+    private volatile EditStatus editStatus;
+    private volatile String editMessage;
 
     // ParseState für On-the-Fly Parsing
-    private ParseState parseState = ParseState.NONE;
-    private long lastParsedHash;
+    private volatile ParseState parseState = ParseState.NONE;
+    private volatile long lastParsedHash;
 
     // Schwache Referenz zum Tree für Typzuordnung
-    private EditTree editTree;
+    private volatile EditTree editTree;
 
     /**
      * Creates a new EditNodeAbstract with a generated edit ID. Initializes with

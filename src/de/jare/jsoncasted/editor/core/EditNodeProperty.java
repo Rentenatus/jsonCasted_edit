@@ -37,7 +37,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     private String propName;
     private String primValue;
     private JsonNodeType type;
-    private JsonFieldDescriptor jsonField;
+    private volatile JsonFieldDescriptor jsonField;
 
     /**
      * Creates a new EditNodeProperty with the specified name and NULL type.

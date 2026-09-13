@@ -28,7 +28,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private String objektValue;
     private String objektInfo;
     private String objektId;
-    private JsonTypeDescriptor jsonType;
+    private volatile JsonTypeDescriptor jsonType;
 
     /**
      * Creates a new EditNodeObject with the specified value.
