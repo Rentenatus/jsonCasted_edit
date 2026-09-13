@@ -794,12 +794,13 @@ public class EditTree {
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
-        assignTypesFromModel(); // Automatische Zuordnung bei Modellwechsel
-        
+
         // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
         startParserService();
-        
-        // Füge den Root-Knoten zur Parse-Queue hinzu, um das Parsen zu starten
+
+        // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
+        // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
+        // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
         if (parserService != null && parserService.isRunning()) {
             // Markiere alle Knoten als EDITED, damit sie geparst werden
             markAllNodesAsEdited(getRoot());

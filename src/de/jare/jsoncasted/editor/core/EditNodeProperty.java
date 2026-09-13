@@ -96,14 +96,11 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         String oldName = this.propName;
         this.propName = name;
 
-        // Notify parser listener about name change
+        // Notify parser listener about name change — this triggers
+        // asynchronous re-parsing via the parse queue.
         EditTree tree = getEditTree();
         if (tree != null) {
             tree.notifyNodeNameChanged(this, oldName, name);
-            // Trigger Typzuordnung neu, falls sich der Name ändert
-            if (tree.getJsonModelDescriptor() != null) {
-                tree.assignTypesForNode(this);
-            }
         }
     }
 
@@ -162,11 +159,12 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setType(JsonNodeType type) {
         this.type = type;
-        
-        // Trigger Typzuordnung neu, falls sich der Typ ändert
+
+        // Notify parser listener about type change — this triggers
+        // asynchronous re-parsing via the parse queue.
         EditTree tree = getEditTree();
-        if (tree != null && tree.getJsonModelDescriptor() != null) {
-            tree.assignTypesForNode(this);
+        if (tree != null) {
+            tree.notifyTypeDescriptorChanged(this);
         }
     }
 
