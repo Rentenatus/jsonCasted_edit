@@ -524,16 +524,18 @@ public class TypeParserServiceNGTest {
     private void waitForParsingCompletion() {
         long startTime = System.currentTimeMillis();
         EditNodeAbstract root = editTree.getRoot();
-        
+
         while (System.currentTimeMillis() - startTime < 10000) {
-            // Check if queue is empty and root is DONE
-            boolean queueEmpty = parserService != null && parserService.getQueuedTaskCount() == 0;
+            // Check if queue is empty and root is DONE.
+            // Use editTree.getParseQueue() directly because this method
+            // may be called before the parserService field is assigned.
+            boolean queueEmpty = editTree.getParseQueue().isEmpty();
             boolean rootDone = root.getParseState() == ParseState.DONE;
-            
+
             if (queueEmpty && rootDone) {
                 return;
             }
-            
+
             try {
                 Thread.sleep(200);
             } catch (InterruptedException e) {

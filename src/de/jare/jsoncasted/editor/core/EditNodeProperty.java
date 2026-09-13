@@ -95,7 +95,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     public void setName(String name) {
         String oldName = this.propName;
         this.propName = name;
-        
+
         // Notify parser listener about name change
         EditTree tree = getEditTree();
         if (tree != null) {

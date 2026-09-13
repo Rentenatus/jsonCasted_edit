@@ -55,12 +55,36 @@ public class EditTree {
         this.root = root;
         this.weightMonitor = weightMonitor;
         rangeRelabeling(root);
-        
-        // Setze die Tree-Referenz für den Root Node
+
+        // Setze die Tree-Referenz für den Root Node und alle Nachfahren.
+        // Children werden beim addChildPhase1 normalerweise vom Parent
+        // vererbt, aber JsonTreeConverter baut den Baum bevor das EditTree
+        // existiert, sodass die Tree-Referenz nie propagiert wurde.
         root.setEditTree(this);
-        
+        propagateEditTree(root);
+
         // Initialisiere den ParseState für alle Knoten auf NONE
         initializeParseStates(root);
+    }
+
+    /**
+     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des
+     * übergebenen Knotens. Wird im Konstruktor aufgerufen, um sicherzustellen,
+     * dass jeder Knoten im Baum seine EditTree-Referenz kennt.
+     *
+     * @param node der Startknoten
+     */
+    private void propagateEditTree(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            EditNode child = node.getChildAt(i);
+            if (child instanceof EditNodeAbstract) {
+                ((EditNodeAbstract) child).setEditTree(this);
+                propagateEditTree((EditNodeAbstract) child);
+            }
+        }
     }
 
     /**
@@ -954,8 +978,11 @@ public class EditTree {
     }
 
     /**
-     * Adds a node to the parse queue if it's not already pending.
-     * This method ensures deduplication using the pendingNodes set.
+     * Adds a node to the parse queue, ensuring it is always queued even if it
+     * was already pending. This fixes a race condition where the UI-thread
+     * re-queues a node that the parser is currently processing: the node is
+     * first removed from the pending set and then re-added, so the parser's
+     * subsequent removeFromPending call does not lose the re-queue.
      *
      * @param node the node to add to the parse queue
      */
@@ -963,24 +990,26 @@ public class EditTree {
         if (node == null) {
             return;
         }
-        // Only add if not already pending (deduplication)
-        if (pendingNodes.add(node)) {
-            parseQueue.add(node);
-            // Update parse state to PENDING
-            node.setParseState(ParseState.PENDING);
-        }
+        // Remove first, then re-add to guarantee the node is queued
+        // even if it was already pending.
+        pendingNodes.remove(node);
+        pendingNodes.add(node);
+        parseQueue.add(node);
+        // Update parse state to PENDING
+        node.setParseState(ParseState.PENDING);
     }
 
     /**
-     * Removes a node from the pending set and queue if present.
-     * Used when a node is being processed or needs to be re-queued.
+     * Removes a node from the pending set. Does NOT remove from the parse
+     * queue: if the node was re-queued by addToParseQueue while the parser
+     * was processing it, the re-queued entry must survive so the parser
+     * picks it up again.
      *
      * @param node the node to remove
      */
     public void removeFromPending(EditNodeAbstract node) {
         if (node != null) {
             pendingNodes.remove(node);
-            parseQueue.remove(node);
         }
     }
 
