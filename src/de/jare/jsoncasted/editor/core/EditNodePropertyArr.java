@@ -11,6 +11,7 @@ import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,12 +51,6 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
         EditNodeObject parentObject = (EditNodeObject) parent;
         JsonTypeDescriptor parentType = parentObject.getJsonType();
 
-        if (parentType == null) {
-            setEditStatus(EditStatus.WARNING);
-            setEditMessage("Cannot resolve field: parent has no type descriptor");
-            return false;
-        }
-
         String fieldName = getName();
         if (fieldName == null || fieldName.isEmpty()) {
             setEditStatus(EditStatus.WARNING);
@@ -63,11 +58,33 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
             return false;
         }
 
-        // Suche nach dem Field im Parent-Typ
+        // 1. Schnelle Existenzpruefung ueber die gesamte Modell-Feldkarte.
+        Map<String, List<JsonFieldDescriptor>> fieldMap = descriptor.getOrCreateFieldMap();
+        List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
+        if (knownFields == null || knownFields.isEmpty()) {
+            setEditStatus(EditStatus.ERROR);
+            setEditMessage("Field '" + fieldName + "' is unknown in model '" + descriptor.getModelName() + "'");
+            return false;
+        }
+
+        // 2. Parent hat noch keinen Typ - Mehrdeutigkeit mit Kontext melden.
+        if (parentType == null) {
+            setEditStatus(EditStatus.WARNING);
+            if (knownFields.size() == 1) {
+                setEditMessage("Parent has no type descriptor; field '" + fieldName
+                        + "' is unique in the model");
+            } else {
+                setEditMessage("Parent has no type descriptor; field '" + fieldName
+                        + "' is ambiguous (declared in " + knownFields.size() + " types)");
+            }
+            return false;
+        }
+
+        // 3. Feld innerhalb des Parent-Typs aufloesen.
         JsonFieldDescriptor foundField = parentType.getField(fieldName);
 
         if (foundField != null) {
-            // Zusätzlich prüfen: Feld muss Array-Typ unterstützen
+            // Zusaetzlich pruefen: Feld muss Array-Typ unterstuetzen
             if (foundField.isAsArray() || foundField.isAsListOrArray()) {
                 setJsonField(foundField);
                 setEditStatus(EditStatus.OKAY);
@@ -78,11 +95,15 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
                 setEditMessage("Field '" + fieldName + "' in type '" + parentType.getTypeName() + "' is not an array type");
                 return false;
             }
-        } else {
-            setEditStatus(EditStatus.ERROR);
-            setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
-            return false;
         }
+
+        // Feld existiert im Modell, aber nicht im Parent-Typ - Kontext liefern.
+        List<String> declaringTypeNames = collectDeclaringTypeNames(descriptor, fieldName);
+        setEditStatus(EditStatus.ERROR);
+        setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName()
+                + "' (declared in " + declaringTypeNames.size() + " type(s): "
+                + String.join(", ", declaringTypeNames) + ")");
+        return false;
     }
 
     /**

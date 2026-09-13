@@ -264,7 +264,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      * @param fieldName the field name to look up
      * @return list of type names declaring the field (never null, may be empty)
      */
-    private List<String> collectDeclaringTypeNames(JsonModelDescriptor descriptor, String fieldName) {
+    protected List<String> collectDeclaringTypeNames(JsonModelDescriptor descriptor, String fieldName) {
         List<String> names = new ArrayList<>();
         if (descriptor == null || fieldName == null) {
             return names;
