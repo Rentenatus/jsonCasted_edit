@@ -325,6 +325,7 @@ public class TypeParserService implements TypeParserListener {
             JsonTypeDescriptor rootType = editTree.getRootType();
             if (rootType != null) {
                 rootNode.setJsonType(rootType);
+                rootNode.setCastName(rootType.getTypeName());
                 rootNode.setEditStatus(EditStatus.OKAY);
                 rootNode.setEditMessage(null);
                 typeAssigned = true;
@@ -417,6 +418,7 @@ public class TypeParserService implements TypeParserListener {
             // Unique match - set the parent's type
             JsonTypeDescriptor parentType = typesWithField.get(0);
             parentObject.setJsonType(parentType);
+            parentObject.setCastName(parentType.getTypeName());
             parentObject.setEditStatus(EditStatus.OKAY);
             parentObject.setEditMessage(null);
 
