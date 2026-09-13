@@ -11,6 +11,7 @@ import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -410,24 +411,30 @@ public class TypeParserService implements TypeParserListener {
      */
     private List<JsonTypeDescriptor> getTypesContainingField(JsonModelDescriptor model, String fieldName) {
         List<JsonTypeDescriptor> result = new ArrayList<>();
-        
+
         if (model == null || fieldName == null || fieldName.isEmpty()) {
             return result;
         }
-        
-        // Iterate through all types in the model
+
+        // Fast existence pre-check via the cached field map.
+        // Each entry groups all field descriptors sharing a name across the model,
+        // so an absent entry means no type declares the field anywhere.
+        Map<String, List<JsonFieldDescriptor>> fieldMap = model.getOrCreateFieldMap();
+        List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
+        if (knownFields == null || knownFields.isEmpty()) {
+            return result;
+        }
+
+        // Collect the types that actually declare this field.
         for (JsonTypeDescriptor type : model.getTypes()) {
             if (type == null) {
                 continue;
             }
-            
-            // Check if this type has a field with the specified name
-            JsonFieldDescriptor field = type.getField(fieldName);
-            if (field != null) {
+            if (type.getField(fieldName) != null) {
                 result.add(type);
             }
         }
-        
+
         return result;
     }
 
