@@ -225,12 +225,19 @@ public class TypeParserService implements TypeParserListener {
                     try {
                         executorService.submit(() -> parseNodeSafely(node));
                     } catch (RejectedExecutionException e) {
-                        // Executor is shutting down, mark node as EDITED for retry
+                        // Executor is shutting down — mark as WARNING so the
+                        // user sees the node was not parsed, store message.
+                        LOGGER.log(Level.FINE, "Executor rejected node [editId="
+                                + node.getEditId() + "]: " + e.getMessage(), e);
+                        node.setEditStatus(EditStatus.WARNING);
+                        node.setEditMessage("Parser shutting down, node will be re-parsed on next pass");
                         node.setParseState(ParseState.EDITED);
                         editTree.removeFromPending(node);
                     }
                 } else {
-                    // If service is stopping, mark as EDITED so it can be re-queued later
+                    // If service is stopping, mark as EDITED so it can be re-queued later.
+                    node.setEditStatus(EditStatus.WARNING);
+                    node.setEditMessage("Parser service not running, node pending re-parse");
                     node.setParseState(ParseState.EDITED);
                     editTree.removeFromPending(node);
                 }
@@ -257,9 +264,17 @@ public class TypeParserService implements TypeParserListener {
             parseNode(node);
         } catch (Exception e) {
             // Log error for this specific node
-            LOGGER.log(Level.WARNING, "Error parsing node [editId=" + node.getEditId() + ", name=" + node.getName() + "]: " + e.getMessage(), e);
-            // Mark as EDITED so it can be retried
-            node.setParseState(ParseState.EDITED);
+            LOGGER.log(Level.WARNING, "Error parsing node [editId="
+                    + node.getEditId() + ", name=" + node.getName() + "]: "
+                    + e.getMessage(), e);
+            // Store the error on the node so the user can see it in the UI.
+            // The node is marked DONE (not EDITED) so it is not retried
+            // indefinitely — the error is persistent until the underlying
+            // problem is fixed.
+            node.setEditStatus(EditStatus.ERROR);
+            node.setEditMessage("Parse error: " + e.getMessage());
+            node.setParseState(ParseState.DONE);
+            node.setLastParsedHash(node.computeHash());
             editTree.removeFromPending(node);
         }
     }
@@ -284,7 +299,19 @@ public class TypeParserService implements TypeParserListener {
         }
 
         // Check if the node still needs parsing by comparing hash
-        long currentHash = node.computeHash();
+        long currentHash;
+        try {
+            currentHash = node.computeHash();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to compute hash for node [editId="
+                    + node.getEditId() + "]: " + e.getMessage(), e);
+            node.setEditStatus(EditStatus.ERROR);
+            node.setEditMessage("Failed to compute hash: " + e.getMessage());
+            node.setParseState(ParseState.DONE);
+            editTree.removeFromPending(node);
+            return;
+        }
+
         long lastHash = node.getLastParsedHash();
 
         // If hash hasn't changed and we're already DONE, no need to re-parse
@@ -315,8 +342,22 @@ public class TypeParserService implements TypeParserListener {
             oldType = ((EditNodeObject) node).getJsonType();
         }
 
-        // Perform type assignment using the existing tryAssignType method
-        boolean typeAssigned = node.tryAssignType(model);
+        // Perform type assignment using the existing tryAssignType method.
+        // tryAssignType handles its own errors via EditStatus and never throws.
+        boolean typeAssigned;
+        try {
+            typeAssigned = node.tryAssignType(model);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "tryAssignType threw for node [editId="
+                    + node.getEditId() + ", name=" + node.getName() + "]: "
+                    + e.getMessage(), e);
+            node.setEditStatus(EditStatus.ERROR);
+            node.setEditMessage("Type assignment error: " + e.getMessage());
+            node.setLastParsedHash(currentHash);
+            node.setParseState(ParseState.DONE);
+            editTree.removeFromPending(node);
+            return;
+        }
 
         // Special handling for root node: if it has no type and no parent,
         // try to assign the root type configured on the EditTree.
@@ -349,7 +390,14 @@ public class TypeParserService implements TypeParserListener {
 
         // For EditNodeObject: try to infer parent type based on field name
         if (typeAssigned && node instanceof EditNodeObject) {
-            tryInferParentTypes((EditNodeObject) node, model);
+            try {
+                tryInferParentTypes((EditNodeObject) node, model);
+            } catch (Exception e) {
+                // tryInferParentTypes is best-effort; if it fails the node
+                // is still parsed, just without parent type inference.
+                LOGGER.log(Level.FINE, "tryInferParentTypes failed for node [editId="
+                        + node.getEditId() + "]: " + e.getMessage(), e);
+            }
         }
 
         editTree.removeFromPending(node);
@@ -453,23 +501,28 @@ public class TypeParserService implements TypeParserListener {
             return result;
         }
 
-        // Fast existence pre-check via the cached field map.
-        // Each entry groups all field descriptors sharing a name across the model,
-        // so an absent entry means no type declares the field anywhere.
-        Map<String, List<JsonFieldDescriptor>> fieldMap = model.getOrCreateFieldMap();
-        List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
-        if (knownFields == null || knownFields.isEmpty()) {
-            return result;
-        }
+        try {
+            // Fast existence pre-check via the cached field map.
+            // Each entry groups all field descriptors sharing a name across the model,
+            // so an absent entry means no type declares the field anywhere.
+            Map<String, List<JsonFieldDescriptor>> fieldMap = model.getOrCreateFieldMap();
+            List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
+            if (knownFields == null || knownFields.isEmpty()) {
+                return result;
+            }
 
-        // Collect the types that actually declare this field.
-        for (JsonTypeDescriptor type : model.getTypes()) {
-            if (type == null) {
-                continue;
+            // Collect the types that actually declare this field.
+            for (JsonTypeDescriptor type : model.getTypes()) {
+                if (type == null) {
+                    continue;
+                }
+                if (type.getField(fieldName) != null) {
+                    result.add(type);
+                }
             }
-            if (type.getField(fieldName) != null) {
-                result.add(type);
-            }
+        } catch (Exception e) {
+            LOGGER.log(Level.FINE, "getTypesContainingField failed for field '"
+                    + fieldName + "': " + e.getMessage(), e);
         }
 
         return result;
