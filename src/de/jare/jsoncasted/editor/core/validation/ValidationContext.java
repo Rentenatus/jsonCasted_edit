@@ -83,12 +83,14 @@ public class ValidationContext {
 
     /**
      * Returns the current path as a string representation.
+     * The path is rendered from root to current node, e.g.
+     * "root -> child -> grandchild".
      *
      * @return string representation of the path
      */
     public String getPathString() {
         StringBuilder sb = new StringBuilder();
-        java.util.Iterator<EditNode> iterator = path.iterator();
+        java.util.Iterator<EditNode> iterator = path.descendingIterator();
         while (iterator.hasNext()) {
             EditNode node = iterator.next();
             if (sb.length() > 0) {
