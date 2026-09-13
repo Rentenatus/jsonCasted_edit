@@ -182,12 +182,16 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     /**
      * Computes a flat (non-recursive) hash for this node based on its immediate properties.
      * This is used to detect changes that require re-parsing without traversing the entire subtree.
-     * 
+     *
      * The hash is computed from:
      * - editId
      * - name
      * - value (if present)
      * - child count
+     * - jsonType (for EditNodeObject) or jsonField (for EditNodeProperty)
+     *
+     * Including jsonType/jsonField ensures that when a parent's type changes,
+     * the child's hash changes as well, triggering re-parsing of the child.
      *
      * @return a hash code representing the current state of this node
      */
@@ -196,7 +200,16 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         String name = getName();
         String value = getValue();
         int childCount = getChildCount();
-        
+
+        // Include type-specific descriptors so that a parent type change
+        // invalidates the child's hash and triggers re-parsing.
+        Object typeDescriptor = null;
+        if (this instanceof EditNodeObject) {
+            typeDescriptor = ((EditNodeObject) this).getJsonType();
+        } else if (this instanceof EditNodeProperty) {
+            typeDescriptor = ((EditNodeProperty) this).getJsonField();
+        }
+
         // Combine all relevant factors into a single hash
         // Using Objects.hash to create a stable hash from multiple values
         // Objects.hash returns int, so we convert to long and ensure positive
@@ -204,7 +217,8 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
             editId,
             name,
             value,
-            childCount
+            childCount,
+            typeDescriptor
         );
         return (long) hash & 0xFFFFFFFFL; // Ensure positive long value
     }
