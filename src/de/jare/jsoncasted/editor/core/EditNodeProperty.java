@@ -240,10 +240,13 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         // 3. Feld innerhalb des Parent-Typs aufloesen.
         JsonFieldDescriptor foundField = parentType.getField(fieldName);
         if (foundField != null) {
-            setJsonField(foundField);
-            setEditStatus(EditStatus.OKAY);
-            setEditMessage(null);
-            return true;
+            if (validateFieldType(foundField, fieldName, parentType)) {
+                setJsonField(foundField);
+                setEditStatus(EditStatus.OKAY);
+                setEditMessage(null);
+                return true;
+            }
+            return false;
         }
 
         // Feld existiert im Modell, aber nicht im Parent-Typ - Kontext liefern.
@@ -253,6 +256,20 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
                 + "' (declared in " + declaringTypeNames.size() + " type(s): "
                 + String.join(", ", declaringTypeNames) + ")");
         return false;
+    }
+
+    /**
+     * Validates whether the found field is compatible with this property type.
+     * Base implementation accepts any field. Subclasses (e.g. EditNodePropertyArr)
+     * can override this to enforce type-specific constraints (e.g. array type).
+     *
+     * @param foundField the field descriptor found in the parent type
+     * @param fieldName the field name being resolved
+     * @param parentType the parent type descriptor
+     * @return true if the field is valid for this property type
+     */
+    protected boolean validateFieldType(JsonFieldDescriptor foundField, String fieldName, JsonTypeDescriptor parentType) {
+        return true;
     }
 
     /**
