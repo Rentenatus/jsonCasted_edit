@@ -178,7 +178,6 @@ public final class JsonTreeConverter {
      */
     private static void buildEditObject(EditNodeProperty parent, JsonNode jsonNode,
             EditTimes weightMonitor) throws JsonParseException {
-        System.out.println("1 +++++++++++++++   " + jsonNode);
         JsonNodeType type = jsonNode.getType();
 
         if (type == JsonNodeType.OBJECT) {

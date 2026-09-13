@@ -568,13 +568,6 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      * @param totalWeight the total weight of all children
      */
     private void rangeRelabelingFor(int totalWeight) {
-//        System.out.println(totalWeight + "  &&&&&&&&&&&&&&&&  " + getClass().getSimpleName()
-//                + "[editId=" + getEditId()
-//                + ", leftRange=" + getLeftRange()
-//                + ", rightRange=" + getRightRange()
-//                + ", name=" + getName()
-//                + ", value=" + getValue()
-//                + ", type=" + getTypeKey() + "]");
         int size;
         EditNodeAbstract[] sortetArr;
         synchronized (sortedChildren) {

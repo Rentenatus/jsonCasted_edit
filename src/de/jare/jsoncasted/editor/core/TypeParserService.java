@@ -17,6 +17,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Service class for on-the-fly type parsing of EditTree nodes.
@@ -49,6 +51,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Janusch Rentenatus
  */
 public class TypeParserService implements TypeParserListener {
+
+    private static final Logger LOGGER = Logger.getLogger(TypeParserService.class.getName());
 
     /**
      * Default number of threads in the parser thread pool.
@@ -236,8 +240,7 @@ public class TypeParserService implements TypeParserListener {
                 break;
             } catch (Exception e) {
                 // Log error but continue processing
-                System.err.println("Error in TypeParserService queue processor: " + e.getMessage());
-                e.printStackTrace();
+                LOGGER.log(Level.WARNING, "Error in TypeParserService queue processor: " + e.getMessage(), e);
             }
         }
     }
@@ -254,7 +257,7 @@ public class TypeParserService implements TypeParserListener {
             parseNode(node);
         } catch (Exception e) {
             // Log error for this specific node
-            System.err.println("Error parsing node [editId=" + node.getEditId() + ", name=" + node.getName() + "]: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "Error parsing node [editId=" + node.getEditId() + ", name=" + node.getName() + "]: " + e.getMessage(), e);
             // Mark as EDITED so it can be retried
             node.setParseState(ParseState.EDITED);
             editTree.removeFromPending(node);
