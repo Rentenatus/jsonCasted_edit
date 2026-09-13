@@ -10,7 +10,9 @@ import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -205,12 +207,6 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         EditNodeObject parentObject = (EditNodeObject) parent;
         JsonTypeDescriptor parentType = parentObject.getJsonType();
 
-        if (parentType == null) {
-            setEditStatus(EditStatus.WARNING);
-            setEditMessage("Cannot resolve field: parent has no type descriptor");
-            return false;
-        }
-
         String fieldName = getName();
         if (fieldName == null || fieldName.isEmpty()) {
             setEditStatus(EditStatus.WARNING);
@@ -218,19 +214,69 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             return false;
         }
 
-        // Suche nach dem Field im Parent-Typ
-        JsonFieldDescriptor foundField = parentType.getField(fieldName);
+        // 1. Schnelle Existenzpruefung ueber die gesamte Modell-Feldkarte.
+        //    Jeder Eintrag fasst alle Felddefinitionen gleichen Namens zusammen,
+        //    die Listengroesse ist also die Anzahl der Typen, die das Feld
+        //    deklarieren (Mass fuer Mehrdeutigkeit).
+        Map<String, List<JsonFieldDescriptor>> fieldMap = descriptor.getOrCreateFieldMap();
+        List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
+        if (knownFields == null || knownFields.isEmpty()) {
+            setEditStatus(EditStatus.ERROR);
+            setEditMessage("Field '" + fieldName + "' is unknown in model '" + descriptor.getModelName() + "'");
+            return false;
+        }
 
+        // 2. Parent hat noch keinen Typ - Mehrdeutigkeit mit Kontext melden.
+        if (parentType == null) {
+            setEditStatus(EditStatus.WARNING);
+            if (knownFields.size() == 1) {
+                setEditMessage("Parent has no type descriptor; field '" + fieldName
+                        + "' is unique in the model");
+            } else {
+                setEditMessage("Parent has no type descriptor; field '" + fieldName
+                        + "' is ambiguous (declared in " + knownFields.size() + " types)");
+            }
+            return false;
+        }
+
+        // 3. Feld innerhalb des Parent-Typs aufloesen.
+        JsonFieldDescriptor foundField = parentType.getField(fieldName);
         if (foundField != null) {
             setJsonField(foundField);
             setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
-        } else {
-            setEditStatus(EditStatus.ERROR);
-            setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
-            return false;
         }
+
+        // Feld existiert im Modell, aber nicht im Parent-Typ - Kontext liefern.
+        List<String> declaringTypeNames = collectDeclaringTypeNames(descriptor, fieldName);
+        setEditStatus(EditStatus.ERROR);
+        setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName()
+                + "' (declared in " + declaringTypeNames.size() + " type(s): "
+                + String.join(", ", declaringTypeNames) + ")");
+        return false;
+    }
+
+    /**
+     * Collects the names of all types in the model that declare a field with the
+     * given name. Used to enrich error messages with context about where a field
+     * is actually defined.
+     *
+     * @param descriptor the JsonModelDescriptor to search
+     * @param fieldName the field name to look up
+     * @return list of type names declaring the field (never null, may be empty)
+     */
+    private List<String> collectDeclaringTypeNames(JsonModelDescriptor descriptor, String fieldName) {
+        List<String> names = new ArrayList<>();
+        if (descriptor == null || fieldName == null) {
+            return names;
+        }
+        for (JsonTypeDescriptor type : descriptor.getTypes()) {
+            if (type != null && type.getField(fieldName) != null) {
+                names.add(type.getTypeName());
+            }
+        }
+        return names;
     }
 
     // ========== Factory methods ==========
