@@ -803,8 +803,8 @@ public class EditTree {
         if (parserService != null && parserService.isRunning()) {
             // Markiere alle Knoten als EDITED, damit sie geparst werden
             markAllNodesAsEdited(getRoot());
-            // Starte mit dem Root-Knoten
-            addToParseQueue(getRoot());
+            // Alle Knoten zur Queue hinzufügen, nicht nur Root
+            queueAllNodesForParsing(getRoot());
         }
     }
 
@@ -843,6 +843,25 @@ public class EditTree {
                 EditNode child = node.getChildAt(i);
                 if (child instanceof EditNodeAbstract) {
                     markAllNodesAsEdited((EditNodeAbstract) child);
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds all nodes in the subtree rooted at the given node to the parse queue.
+     * Unlike only queuing the root, this ensures every node is processed,
+     * not just the root whose children would otherwise stay in EDITED state.
+     *
+     * @param node the starting node (normally root)
+     */
+    private void queueAllNodesForParsing(EditNodeAbstract node) {
+        if (node != null) {
+            addToParseQueue(node);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    queueAllNodesForParsing((EditNodeAbstract) child);
                 }
             }
         }
@@ -1073,13 +1092,13 @@ public class EditTree {
 
     /**
      * Triggers a full re-parse of the entire tree.
-     * Marks all nodes as EDITED and adds the root to the parse queue.
+     * Marks all nodes as EDITED and adds all nodes to the parse queue.
      * This is useful when you want to force a complete re-evaluation of types.
      */
     public void triggerFullReparse() {
         if (parserService != null && parserService.isRunning()) {
             markAllNodesAsEdited(getRoot());
-            addToParseQueue(getRoot());
+            queueAllNodesForParsing(getRoot());
         }
     }
 

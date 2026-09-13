@@ -283,7 +283,7 @@ public class TypeParserService implements TypeParserListener {
         // Check if the node still needs parsing by comparing hash
         long currentHash = node.computeHash();
         long lastHash = node.getLastParsedHash();
-        
+
         // If hash hasn't changed and we're already DONE, no need to re-parse
         if (currentHash == lastHash && node.getParseState() == ParseState.DONE) {
             editTree.removeFromPending(node);
@@ -295,7 +295,7 @@ public class TypeParserService implements TypeParserListener {
 
         // Get the model descriptor from the tree
         JsonModelDescriptor model = editTree.getJsonModelDescriptor();
-        
+
         if (model == null) {
             // No model descriptor available - set warning status
             node.setParseState(ParseState.DONE);
@@ -306,9 +306,15 @@ public class TypeParserService implements TypeParserListener {
             return;
         }
 
+        // Capture the old type before assignment so we can detect changes
+        JsonTypeDescriptor oldType = null;
+        if (node instanceof EditNodeObject) {
+            oldType = ((EditNodeObject) node).getJsonType();
+        }
+
         // Perform type assignment using the existing tryAssignType method
         boolean typeAssigned = node.tryAssignType(model);
-        
+
         // Special handling for root node: if it has no type and no parent,
         // try to assign the JsonConfigDefinition's root type (ConfigRoot)
         if (!typeAssigned && node instanceof EditNodeObject && node.getParent() == null) {
@@ -323,19 +329,43 @@ public class TypeParserService implements TypeParserListener {
                 System.out.println("Assigned root type (ConfigRoot) to root node");
             }
         }
-        
+
         // Update the last parsed hash after successful parsing
         node.setLastParsedHash(currentHash);
-        
+
         // Mark as DONE
         node.setParseState(ParseState.DONE);
-        
+
+        // If the node is an EditNodeObject and its type changed, re-queue all
+        // children so their fields can be resolved against the new parent type.
+        if (node instanceof EditNodeObject) {
+            JsonTypeDescriptor newType = ((EditNodeObject) node).getJsonType();
+            if (newType != oldType && node.getChildCount() > 0) {
+                queueChildrenForReparse(node);
+            }
+        }
+
         // For EditNodeObject: try to infer parent type based on field name
         if (typeAssigned && node instanceof EditNodeObject) {
             tryInferParentTypes((EditNodeObject) node, model);
         }
-        
+
         editTree.removeFromPending(node);
+    }
+
+    /**
+     * Re-queues all children of the given node for re-parsing.
+     * Marks each child as EDITED and adds it to the parse queue.
+     *
+     * @param parent the parent whose children need re-parsing
+     */
+    private void queueChildrenForReparse(EditNodeAbstract parent) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            EditNode child = parent.getChildAt(i);
+            if (child instanceof EditNodeAbstract) {
+                addNodeToParseQueue((EditNodeAbstract) child);
+            }
+        }
     }
 
     /**
@@ -388,11 +418,15 @@ public class TypeParserService implements TypeParserListener {
             parentObject.setJsonType(parentType);
             parentObject.setEditStatus(EditStatus.OKAY);
             parentObject.setEditMessage(null);
-            
+
             // Mark parent as EDITED to trigger re-parsing
             parentObject.setParseState(ParseState.EDITED);
             editTree.addToParseQueue(parentObject);
-            
+
+            // Re-queue all children of the parent so their fields can be
+            // resolved against the newly assigned parent type.
+            queueChildrenForReparse(parentObject);
+
         } else {
             // Multiple types found - ambiguous field name
             parentObject.setEditStatus(EditStatus.WARNING);
@@ -530,18 +564,13 @@ public class TypeParserService implements TypeParserListener {
 
     /**
      * Triggers parsing for the entire tree.
-     * Marks all nodes as EDITED and adds the root to the queue.
+     * Marks all nodes as EDITED and adds all nodes to the queue.
      */
     public void requestFullParse() {
         if (editTree == null) {
             return;
         }
-        
-        EditNodeAbstract root = editTree.getRoot();
-        if (root != null) {
-            root.setParseState(ParseState.EDITED);
-            editTree.addToParseQueue(root);
-        }
+        editTree.triggerFullReparse();
     }
 
     /**
