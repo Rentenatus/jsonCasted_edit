@@ -40,7 +40,7 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
         }
         
         // Traverse the tree to validate all object nodes
-        validateObjectHierarchy(tree.getRoot(), descriptor, context);
+        validateObjectHierarchy(tree.getRoot(), descriptor, context, new HashSet<>());
     }
 
     /**
@@ -49,9 +49,16 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
      * @param node the current node to validate
      * @param descriptor the model descriptor
      * @param context the validation context
+     * @param visited set of already-visited nodes for cycle detection
      */
     private void validateObjectHierarchy(EditNodeAbstract node, JsonModelDescriptor descriptor,
-                                         ValidationContext context) {
+                                         ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
         if (node instanceof EditNodeObject) {
             EditNodeObject objectNode = (EditNodeObject) node;
             JsonTypeDescriptor typeDescriptor = objectNode.getJsonType();
@@ -103,7 +110,7 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                validateObjectHierarchy((EditNodeAbstract) child, descriptor, context);
+                validateObjectHierarchy((EditNodeAbstract) child, descriptor, context, visited);
             }
         }
     }

@@ -50,7 +50,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         Set<String> missingTypeNames = new HashSet<>();
 
         // Traverse the tree to collect all object type names
-        collectObjectTypeNames(tree.getRoot(), usedTypeNames);
+        collectObjectTypeNames(tree.getRoot(), usedTypeNames, new HashSet<>());
 
         // Check if all used types exist in the model
         for (String typeName : usedTypeNames) {
@@ -62,7 +62,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         // If there are missing types, add error diagnostics
         if (!missingTypeNames.isEmpty()) {
             // Find nodes with missing types
-            findNodesWithMissingTypes(tree.getRoot(), descriptor, missingTypeNames, context);
+            findNodesWithMissingTypes(tree.getRoot(), descriptor, missingTypeNames, context, new HashSet<>());
 
             // Also add a general tree-level diagnostic
             context.addError("editnode.tree.orphaned.types",
@@ -77,7 +77,10 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
      * @param node the current node to process
      * @param typeNames set to collect type names
      */
-    private void collectObjectTypeNames(EditNodeAbstract node, Set<String> typeNames) {
+    private void collectObjectTypeNames(EditNodeAbstract node, Set<String> typeNames, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            return;
+        }
         if (node instanceof EditNodeObject) {
             EditNodeObject objectNode = (EditNodeObject) node;
             String typeName = objectNode.getName();
@@ -90,7 +93,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                collectObjectTypeNames((EditNodeAbstract) child, typeNames);
+                collectObjectTypeNames((EditNodeAbstract) child, typeNames, visited);
             }
         }
     }
@@ -104,7 +107,13 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
      * @param context the validation context
      */
     private void findNodesWithMissingTypes(EditNodeAbstract node, JsonModelDescriptor descriptor,
-            Set<String> missingTypeNames, ValidationContext context) {
+            Set<String> missingTypeNames, ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
         if (node instanceof EditNodeObject) {
             EditNodeObject objectNode = (EditNodeObject) node;
             String typeName = objectNode.getName();
@@ -120,7 +129,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                findNodesWithMissingTypes((EditNodeAbstract) child, descriptor, missingTypeNames, context);
+                findNodesWithMissingTypes((EditNodeAbstract) child, descriptor, missingTypeNames, context, visited);
             }
         }
     }
@@ -132,9 +141,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
      * @param context the validation context
      */
     private void validateStructure(EditTree tree, ValidationContext context) {
-        // Check for structural issues that don't require a model
-        // For example: property nodes without proper parent
-        validateStructureRecursive(tree.getRoot(), context);
+        validateStructureRecursive(tree.getRoot(), context, new HashSet<>());
     }
 
     /**
@@ -143,7 +150,13 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
      * @param node the current node to validate
      * @param context the validation context
      */
-    private void validateStructureRecursive(EditNodeAbstract node, ValidationContext context) {
+    private void validateStructureRecursive(EditNodeAbstract node, ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
         // Check property nodes have valid parents
         if (node instanceof EditNodeProperty) {
             EditNode parent = node.getParent();
@@ -165,7 +178,7 @@ public class EditTreeModelConsistencyValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                validateStructureRecursive((EditNodeAbstract) child, context);
+                validateStructureRecursive((EditNodeAbstract) child, context, visited);
             }
         }
     }

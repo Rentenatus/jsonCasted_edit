@@ -44,17 +44,25 @@ public class EditNodeRequiredFieldsValidator implements EditTreeValidator {
         }
         
         // Traverse the tree to find all object nodes
-        validateObjectNode(tree.getRoot(), descriptor, context);
+        validateObjectNode(tree.getRoot(), descriptor, context, new HashSet<>());
     }
-    
+
     /**
      * Validates a single object node for required fields.
      *
      * @param node the node to validate
      * @param descriptor the model descriptor
      * @param context the validation context
+     * @param visited set of already-visited nodes for cycle detection
      */
-    private void validateObjectNode(EditNodeAbstract node, JsonModelDescriptor descriptor, ValidationContext context) {
+    private void validateObjectNode(EditNodeAbstract node, JsonModelDescriptor descriptor,
+                                    ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
         if (node instanceof EditNodeObject) {
             EditNodeObject objectNode = (EditNodeObject) node;
             JsonTypeDescriptor typeDescriptor = objectNode.getJsonType();
@@ -97,7 +105,7 @@ public class EditNodeRequiredFieldsValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                validateObjectNode((EditNodeAbstract) child, descriptor, context);
+                validateObjectNode((EditNodeAbstract) child, descriptor, context, visited);
             }
         }
     }
