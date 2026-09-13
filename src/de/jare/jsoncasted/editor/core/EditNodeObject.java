@@ -31,6 +31,19 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile JsonTypeDescriptor jsonType;
 
     /**
+     * Cached name of the resolved type. When the parser successfully assigns
+     * a {@link JsonTypeDescriptor}, the type's name is stored here so that
+     * subsequent re-parses can use {@code descriptor.getType(castName)}
+     * (O(1) HashMap lookup) instead of falling through to the slower
+     * {@code getTypePerceptive(name)} lineare search.
+     * <p>
+     * This is especially useful when the node name differs from the type name
+     * (e.g. node "config1" vs. type "ConfigRoot").
+     * </p>
+     */
+    private volatile String castName;
+
+    /**
      * Creates a new EditNodeObject with the specified value.
      *
      * @param objektValue the value/name for this object node
@@ -136,6 +149,28 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     public void setObjektId(String objektId) {
         this.objektId = objektId;
+    }
+
+    /**
+     * Returns the cached cast name of the resolved type, if any.
+     * This is the type name that was successfully used in a previous
+     * {@link #tryAssignType(JsonModelDescriptor)} call.
+     *
+     * @return the cast name, or {@code null} if not yet resolved
+     */
+    public String getCastName() {
+        return castName;
+    }
+
+    /**
+     * Sets the cached cast name. When set, {@link #tryAssignType} will
+     * try {@code descriptor.getType(castName)} first before falling
+     * back to the node name.
+     *
+     * @param castName the cast name to set, or {@code null} to clear
+     */
+    public void setCastName(String castName) {
+        this.castName = castName;
     }
 
     @Override
