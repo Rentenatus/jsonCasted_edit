@@ -59,7 +59,16 @@ public class TypeParserServiceNGTest {
         // Load JSON file into EditTree using JsonTreeConverter
         editTree = JsonTreeConverter.fromJsonFile(configFile);
         assertNotNull(editTree, "EditTree should be created from JSON file");
-        
+
+        // Set the root type from the model definition so the parser
+        // can assign it to the root node without hardcoding type names.
+        String rootTypeName = JsonConfigDefinition.INSTANCE.getRootClass().getcName();
+        JsonTypeDescriptor rootTypeDescriptor = modelDescriptor.getType(rootTypeName);
+        if (rootTypeDescriptor == null) {
+            rootTypeDescriptor = modelDescriptor.getTypePerceptive(rootTypeName);
+        }
+        editTree.setRootType(rootTypeDescriptor);
+
         // Set the model descriptor to the tree (this should auto-start the parser)
         editTree.setJsonModelDescriptor(modelDescriptor);
         

@@ -7,6 +7,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -24,7 +25,8 @@ public class EditTree {
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
     private JsonModelDescriptor jsonModelDescriptor;
-    
+    private JsonTypeDescriptor rootType;
+
     // On-the-Fly Parsing Infrastruktur
     private TypeParserService parserService;
     private TypeParserListener parserListener;
@@ -784,6 +786,29 @@ public class EditTree {
      */
     public JsonModelDescriptor getJsonModelDescriptor() {
         return jsonModelDescriptor;
+    }
+
+    /**
+     * Returns the root type descriptor for this tree, if set.
+     * Used by the parser to assign a type to the root node when its name
+     * does not match any type in the model.
+     *
+     * @return the root type descriptor, or {@code null} if not set.
+     */
+    public JsonTypeDescriptor getRootType() {
+        return rootType;
+    }
+
+    /**
+     * Sets the root type descriptor for this tree.
+     * This allows the parser to assign a type to the root node without
+     * hardcoding a specific type name. The caller should obtain the
+     * root type from the model definition (e.g., JsonItemDefinition.getRootClass()).
+     *
+     * @param rootType the root type descriptor to set, or {@code null} to clear.
+     */
+    public void setRootType(JsonTypeDescriptor rootType) {
+        this.rootType = rootType;
     }
 
     /**
