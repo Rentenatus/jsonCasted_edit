@@ -158,15 +158,15 @@ public class EditNodeCoreNGTest {
         node.setCastName("MyType");
 
         var attrs = node.getAttributes();
-        assertTrue(attrs.containsKey("castName"));
-        assertEquals(attrs.get("castName").getValue(), "MyType");
+        assertTrue(attrs.containsKey("|cast name"));
+        assertEquals(attrs.get("|cast name").getValue(), "MyType");
     }
 
     @Test
     public void testCastNameFromAttributes() {
         EditNodeObject node = new EditNodeObject("test");
         java.util.Map<String, JackAttribut> props = new java.util.HashMap<>();
-        props.put("castName", new JackAttribut("castName", "RestoredType"));
+        props.put("|cast name", new JackAttribut("cast name", "RestoredType"));
         node.setAttributes(props);
 
         assertEquals(node.getCastName(), "RestoredType");

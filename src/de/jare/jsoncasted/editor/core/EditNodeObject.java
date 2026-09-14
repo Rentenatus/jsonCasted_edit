@@ -313,7 +313,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("infotype", new JackAttribut("infotype", getObjektInfo()));
         attributes.put("objektId", new JackAttribut("objektId", getObjektId()));
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
-        attributes.put("castName", new JackAttribut("castName", getCastName()));
+        attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
         return putEditAttributes(attributes);
     }
 
@@ -346,7 +346,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
         }
-        JackAttribut castNameAttr = props.get("castName");
+        JackAttribut castNameAttr = props.get("|cast name");
         if (castNameAttr != null) {
             setCastName((String) castNameAttr.getValue());
         }
