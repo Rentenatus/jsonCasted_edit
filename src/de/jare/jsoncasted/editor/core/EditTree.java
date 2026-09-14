@@ -24,6 +24,7 @@ public class EditTree {
     private final EditTimes weightMonitor;
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
+    private String descriptionFilePath;
     private JsonModelDescriptor jsonModelDescriptor;
     private JsonTypeDescriptor rootType;
 
@@ -70,9 +71,9 @@ public class EditTree {
     }
 
     /**
-     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des
-     * übergebenen Knotens. Wird im Konstruktor aufgerufen, um sicherzustellen,
-     * dass jeder Knoten im Baum seine EditTree-Referenz kennt.
+     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des übergebenen
+     * Knotens. Wird im Konstruktor aufgerufen, um sicherzustellen, dass jeder
+     * Knoten im Baum seine EditTree-Referenz kennt.
      *
      * @param node der Startknoten
      */
@@ -90,8 +91,8 @@ public class EditTree {
     }
 
     /**
-     * Initialisiert den ParseState für alle Knoten im Baum auf NONE.
-     * Wird beim Erstellen des Baums aufgerufen.
+     * Initialisiert den ParseState für alle Knoten im Baum auf NONE. Wird beim
+     * Erstellen des Baums aufgerufen.
      *
      * @param node der Startknoten (normalerweise root)
      */
@@ -408,7 +409,7 @@ public class EditTree {
         } else {
             addChild(parentNode, newNode);
         }
-        
+
         return newNode;
     }
 
@@ -425,15 +426,15 @@ public class EditTree {
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, boolean asArray) {
         checkParentProps(parentNode);
         EditNodeAbstract newNode = parentNode.addNewChild(nodeText, asArray, weightMonitor);
-        
+
         // Automatische Typzuordnung für den neuen Node
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
-        
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
-        
+
         return newNode;
     }
 
@@ -453,15 +454,15 @@ public class EditTree {
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, int index, boolean asArray) {
         checkParentProps(parentNode);
         EditNodeAbstract newNode = parentNode.addNewChild(nodeText, index, asArray, weightMonitor);
-        
+
         // Automatische Typzuordnung für den neuen Node
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
-        
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
-        
+
         return newNode;
     }
 
@@ -549,12 +550,12 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, weightMonitor);
-        
+
         // Automatische Typzuordnung für den neuen Node
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
-        
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
     }
@@ -570,12 +571,12 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode, int index) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, index, weightMonitor);
-        
+
         // Automatische Typzuordnung für den neuen Node
         if (jsonModelDescriptor != null) {
             newNode.tryAssignType(jsonModelDescriptor);
         }
-        
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
     }
@@ -593,12 +594,12 @@ public class EditTree {
     public boolean removeChild(EditNodeAbstract parentNode, EditNodeAbstract child) {
         checkParentProps(parentNode);
         boolean removed = parentNode.removeChild(child);
-        
+
         // Notify parser listener about child removal
         if (removed) {
             notifyChildRemoved(parentNode, child);
         }
-        
+
         return removed;
     }
 
@@ -789,9 +790,9 @@ public class EditTree {
     }
 
     /**
-     * Returns the root type descriptor for this tree, if set.
-     * Used by the parser to assign a type to the root node when its name
-     * does not match any type in the model.
+     * Returns the root type descriptor for this tree, if set. Used by the
+     * parser to assign a type to the root node when its name does not match any
+     * type in the model.
      *
      * @return the root type descriptor, or {@code null} if not set.
      */
@@ -800,20 +801,29 @@ public class EditTree {
     }
 
     /**
-     * Sets the root type descriptor for this tree.
-     * This allows the parser to assign a type to the root node without
-     * hardcoding a specific type name. The caller should obtain the
-     * root type from the model definition (e.g., JsonItemDefinition.getRootClass()).
+     * Sets the root type descriptor for this tree. This allows the parser to
+     * assign a type to the root node without hardcoding a specific type name.
+     * The caller should obtain the root type from the model definition (e.g.,
+     * JsonItemDefinition.getRootClass()).
      *
-     * @param rootType the root type descriptor to set, or {@code null} to clear.
+     * @param rootType the root type descriptor to set, or {@code null} to
+     * clear.
      */
     public void setRootType(JsonTypeDescriptor rootType) {
         this.rootType = rootType;
     }
 
+    void setDescriptionFilePath(String descriptionFilePath) {
+        this.descriptionFilePath = descriptionFilePath;
+    }
+
+    public String getDescriptionFilePath() {
+        return descriptionFilePath;
+    }
+
     /**
-     * Sets the JsonModelDescriptor for this tree.
-     * Automatically starts the parser service if not already running.
+     * Sets the JsonModelDescriptor for this tree. Automatically starts the
+     * parser service if not already running.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
@@ -835,8 +845,8 @@ public class EditTree {
     }
 
     /**
-     * Startet den TypeParserService für diesen Baum, falls noch nicht gestartet.
-     * Erstellt einen neuen Service, wenn keiner existiert.
+     * Startet den TypeParserService für diesen Baum, falls noch nicht
+     * gestartet. Erstellt einen neuen Service, wenn keiner existiert.
      */
     public void startParserService() {
         if (parserService == null) {
@@ -857,7 +867,8 @@ public class EditTree {
     }
 
     /**
-     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing zu erzwingen.
+     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing
+     * zu erzwingen.
      *
      * @param node der Startknoten
      */
@@ -875,9 +886,10 @@ public class EditTree {
     }
 
     /**
-     * Adds all nodes in the subtree rooted at the given node to the parse queue.
-     * Unlike only queuing the root, this ensures every node is processed,
-     * not just the root whose children would otherwise stay in EDITED state.
+     * Adds all nodes in the subtree rooted at the given node to the parse
+     * queue. Unlike only queuing the root, this ensures every node is
+     * processed, not just the root whose children would otherwise stay in
+     * EDITED state.
      *
      * @param node the starting node (normally root)
      */
@@ -894,7 +906,6 @@ public class EditTree {
     }
 
     // ========== On-the-Fly Parsing Methods ==========
-
     /**
      * Returns the TypeParserService for this tree.
      *
@@ -905,9 +916,9 @@ public class EditTree {
     }
 
     /**
-     * Sets the TypeParserService for this tree.
-     * The service is responsible for on-the-fly type parsing of nodes.
-     * Automatically starts the service if it's not null and not already running.
+     * Sets the TypeParserService for this tree. The service is responsible for
+     * on-the-fly type parsing of nodes. Automatically starts the service if
+     * it's not null and not already running.
      *
      * @param parserService the parser service to set
      */
@@ -933,8 +944,8 @@ public class EditTree {
     }
 
     /**
-     * Sets the TypeParserListener for this tree.
-     * The listener receives notifications about node changes that require re-parsing.
+     * Sets the TypeParserListener for this tree. The listener receives
+     * notifications about node changes that require re-parsing.
      *
      * @param parserListener the parser listener to set
      */
@@ -1004,8 +1015,8 @@ public class EditTree {
     }
 
     /**
-     * Returns the parse queue for this tree.
-     * Contains nodes that are waiting to be parsed.
+     * Returns the parse queue for this tree. Contains nodes that are waiting to
+     * be parsed.
      *
      * @return the parse queue (thread-safe)
      */
@@ -1046,9 +1057,9 @@ public class EditTree {
 
     /**
      * Removes a node from the pending set. Does NOT remove from the parse
-     * queue: if the node was re-queued by addToParseQueue while the parser
-     * was processing it, the re-queued entry must survive so the parser
-     * picks it up again.
+     * queue: if the node was re-queued by addToParseQueue while the parser was
+     * processing it, the re-queued entry must survive so the parser picks it up
+     * again.
      *
      * @param node the node to remove
      */
@@ -1059,8 +1070,8 @@ public class EditTree {
     }
 
     /**
-     * Weist Typen aus dem Modell allen Nodes im Baum zu. 
-     * Iteriert durch den gesamten Baum (DFS) und ruft tryAssignType() auf jedem Node auf.
+     * Weist Typen aus dem Modell allen Nodes im Baum zu. Iteriert durch den
+     * gesamten Baum (DFS) und ruft tryAssignType() auf jedem Node auf.
      */
     public void assignTypesFromModel() {
         if (jsonModelDescriptor != null) {
@@ -1070,7 +1081,7 @@ public class EditTree {
 
     /**
      * Rekursive Hilfsmethode zur Typzuordnung für den gesamten Baum.
-     * 
+     *
      * @param node Der aktuelle Node
      * @param descriptor Der JsonModelDescriptor
      */
@@ -1086,7 +1097,7 @@ public class EditTree {
 
     /**
      * Weist Typen für einen einzelnen Node und seine Kinder zu.
-     * 
+     *
      * @param node Der Node, für den die Typzuordnung durchgeführt werden soll
      */
     public void assignTypesForNode(EditNodeAbstract node) {
@@ -1115,11 +1126,10 @@ public class EditTree {
     }
 
     // ========== On-the-Fly Parser Lifecycle Methods ==========
-
     /**
-     * Triggers a full re-parse of the entire tree.
-     * Marks all nodes as EDITED and adds all nodes to the parse queue.
-     * This is useful when you want to force a complete re-evaluation of types.
+     * Triggers a full re-parse of the entire tree. Marks all nodes as EDITED
+     * and adds all nodes to the parse queue. This is useful when you want to
+     * force a complete re-evaluation of types.
      */
     public void triggerFullReparse() {
         if (parserService != null && parserService.isRunning()) {
@@ -1129,9 +1139,8 @@ public class EditTree {
     }
 
     /**
-     * Closes this EditTree and releases resources.
-     * Stops the parser service and cleans up.
-     * Should be called when the tree is no longer needed.
+     * Closes this EditTree and releases resources. Stops the parser service and
+     * cleans up. Should be called when the tree is no longer needed.
      */
     public void close() {
         stopParserService();

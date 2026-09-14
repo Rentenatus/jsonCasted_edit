@@ -8,11 +8,17 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.debug.JsonDebugLevel;
 import de.jare.jsoncasted.io.JsonParseException;
+import de.jare.jsoncasted.io.JsonParser;
+import de.jare.jsoncasted.io.convertservice.WoodElementResolver;
+import de.jare.jsoncasted.io.convertservice.WoodResolution;
 import de.jare.jsoncasted.io.parserservice.JsonParserService;
+import de.jare.jsoncasted.item.builder.JsonBuilder;
 import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
+import de.jare.jsoncasted.model.JsonBuildException;
+import de.jare.jsonconfig.def.JsonConfigDefinition;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -22,6 +28,9 @@ import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_LINK;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_MODEL;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_OBJECT_ID;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utility class for converting between JSON data structures and EditTree
@@ -55,7 +64,9 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse file: " + file.getAbsolutePath());
         }
-        return convertRessourceToEditTree(resource, rootName);
+        String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
+        File descriptionFile = WoodElementResolver.findDescriptionFile(descriptionFilePath, file);
+        return loadDescrAndConvertRessourceToEditTree(descriptionFilePath,descriptionFile, resource, rootName);
     }
 
     /**
@@ -72,7 +83,35 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse JSON string");
         }
-        return convertRessourceToEditTree(resource, rootName);
+        String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
+        File descriptionFile = new File(descriptionFilePath);
+        return loadDescrAndConvertRessourceToEditTree(descriptionFilePath,descriptionFile, resource, rootName);
+    }
+
+    /**
+     * 
+     * @param descriptionFilePath
+     * @param descriptionFile
+     * @param resource
+     * @param rootName
+     * @return
+     * @throws JsonParseException 
+     */
+    public static EditTree loadDescrAndConvertRessourceToEditTree(String descriptionFilePath, File descriptionFile, JsonResource resource, String rootName) throws JsonParseException {
+        JsonModelDescriptor descriptor = null;
+        if (descriptionFile != null) {
+            try {
+                JsonConfigDefinition definition = JsonConfigDefinition.getInstance();
+                WoodResolution resolution = JsonParser.parse(descriptionFile, definition, definition.getRootClass());
+                descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
+            } catch (JsonParseException | JsonBuildException | IOException | NullPointerException ex) {
+                Logger.getGlobal().log(Level.SEVERE, "Load JsonModelDescriptor failed.", ex);
+            }
+        }
+        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+        retEditTree.setJsonModelDescriptor(descriptor);
+        retEditTree.setDescriptionFilePath(descriptionFilePath);
+        return retEditTree;
     }
 
     /**
@@ -84,6 +123,7 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during conversion
      */
     public static EditTree convertRessourceToEditTree(JsonResource resource, String rootName) throws JsonParseException {
+        String modelName = WoodElementResolver.extractModelName(resource);
         EditTimes weightMonitor = new EditTimes();
         EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor);
         return new EditTree(root, weightMonitor);
@@ -115,11 +155,11 @@ public final class JsonTreeConverter {
      * <p>
      * Metadata keys defined in {@link JsonTerms} (e.g. {@code _class},
      * {@code _woodObjectId}, {@code _woodLink}, {@code _woodModel},
-     * {@code _woodProviders}) are filtered out and not added as child nodes.
-     * If a {@code _class} entry is present, its value is stored as the
-     * {@link EditNodeObject#setCastName(String) castName} on the root node
-     * so the parser can resolve the type via O(1) cache lookup on the first
-     * parse pass.
+     * {@code _woodProviders}) are filtered out and not added as child nodes. If
+     * a {@code _class} entry is present, its value is stored as the
+     * {@link EditNodeObject#setCastName(String) castName} on the root node so
+     * the parser can resolve the type via O(1) cache lookup on the first parse
+     * pass.
      * </p>
      *
      * @param rootNode the root EditNodeObject to which child nodes will be
