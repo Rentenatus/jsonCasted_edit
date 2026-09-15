@@ -64,9 +64,11 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse file: " + file.getAbsolutePath());
         }
+        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+
         String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
         File descriptionFile = WoodElementResolver.findDescriptionFile(descriptionFilePath, file);
-        return loadDescrAndConvertRessourceToEditTree(descriptionFilePath,descriptionFile, resource, rootName);
+        return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
     }
 
     /**
@@ -83,32 +85,38 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse JSON string");
         }
+        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+
         String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
         File descriptionFile = new File(descriptionFilePath);
-        return loadDescrAndConvertRessourceToEditTree(descriptionFilePath,descriptionFile, resource, rootName);
+        return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
     }
 
     /**
-     * 
+     *
      * @param descriptionFilePath
      * @param descriptionFile
-     * @param resource
-     * @param rootName
+     * @param retEditTree
      * @return
-     * @throws JsonParseException 
+     * @throws JsonParseException
      */
-    public static EditTree loadDescrAndConvertRessourceToEditTree(String descriptionFilePath, File descriptionFile, JsonResource resource, String rootName) throws JsonParseException {
+    public static EditTree loadDescrAndConvertRessourceToEditTree(EditTree retEditTree, String descriptionFilePath, File descriptionFile) throws JsonParseException {
         JsonModelDescriptor descriptor = null;
         if (descriptionFile != null) {
             try {
                 JsonConfigDefinition definition = JsonConfigDefinition.getInstance();
                 WoodResolution resolution = JsonParser.parse(descriptionFile, definition, definition.getRootClass());
                 descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
-            } catch (JsonParseException | JsonBuildException | IOException | NullPointerException ex) {
-                Logger.getGlobal().log(Level.SEVERE, "Load JsonModelDescriptor failed.", ex);
+            } catch (JsonParseException | JsonBuildException | IOException | NullPointerException | ClassCastException ex) {
+                final String failedMsg = "Load JsonModelDescriptor failed. ";
+                Logger.getGlobal().log(Level.SEVERE, failedMsg, ex);
+                final EditNodeAbstract root = retEditTree.getRoot();
+                if (root != null) {
+                    root.setEditMessage(failedMsg + ex.getMessage());
+                    root.setEditStatus(EditStatus.ERROR);
+                }
             }
         }
-        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
         retEditTree.setJsonModelDescriptor(descriptor);
         retEditTree.setDescriptionFilePath(descriptionFilePath);
         return retEditTree;
