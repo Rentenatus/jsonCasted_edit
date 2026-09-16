@@ -131,7 +131,6 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during conversion
      */
     public static EditTree convertRessourceToEditTree(JsonResource resource, String rootName) throws JsonParseException {
-        String modelName = WoodElementResolver.extractModelName(resource);
         EditTimes weightMonitor = new EditTimes();
         EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor);
         return new EditTree(root, weightMonitor);
