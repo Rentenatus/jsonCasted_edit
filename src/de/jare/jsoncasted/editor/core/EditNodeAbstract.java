@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Abstract base class for all editable JSON tree nodes. Implements EditNode
@@ -46,11 +47,15 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private final List<EditNodeAbstract> children = new ArrayList<>();
     private final List<EditNodeAbstract> sortedChildren = new ArrayList<>();
     private int cachedWeight;
-    private EditStatus editStatus;
-    private String editMessage;
+    private volatile EditStatus editStatus;
+    private volatile String editMessage;
+
+    // ParseState für On-the-Fly Parsing
+    private volatile ParseState parseState = ParseState.NONE;
+    private volatile long lastParsedHash;
 
     // Schwache Referenz zum Tree für Typzuordnung
-    private EditTree editTree;
+    private volatile EditTree editTree;
 
     /**
      * Creates a new EditNodeAbstract with a generated edit ID. Initializes with
@@ -63,6 +68,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = ONSET;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     /**
@@ -78,6 +84,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = ONSET;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     /**
@@ -95,6 +102,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.timesRange = timesRange;
         this.cachedWeight = 1;
         this.editStatus = EditStatus.STATELESS;
+        this.parseState = ParseState.NONE;
     }
 
     @Override
@@ -132,6 +140,98 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         this.editMessage = editMessage;
     }
 
+    // ========== ParseState methods ==========
+
+    /**
+     * Returns the parse state for this node.
+     *
+     * @return the parse state (one of ParseState values)
+     */
+    public ParseState getParseState() {
+        return parseState;
+    }
+
+    /**
+     * Sets the parse state for this node.
+     *
+     * @param parseState the new parse state
+     */
+    public void setParseState(ParseState parseState) {
+        this.parseState = parseState;
+    }
+
+    /**
+     * Returns the last parsed hash for this node.
+     * Used for optimization to avoid unnecessary re-parsing.
+     *
+     * @return the last parsed hash value
+     */
+    public long getLastParsedHash() {
+        return lastParsedHash;
+    }
+
+    /**
+     * Sets the last parsed hash for this node.
+     *
+     * @param lastParsedHash the hash value to set
+     */
+    public void setLastParsedHash(long lastParsedHash) {
+        this.lastParsedHash = lastParsedHash;
+    }
+
+    /**
+     * Computes a flat (non-recursive) hash for this node based on its immediate properties.
+     * This is used to detect changes that require re-parsing without traversing the entire subtree.
+     *
+     * The hash is computed from:
+     * - editId
+     * - name
+     * - value (if present)
+     * - child count
+     * - jsonType (for EditNodeObject) or jsonField (for EditNodeProperty)
+     *
+     * Including jsonType/jsonField ensures that when a parent's type changes,
+     * the child's hash changes as well, triggering re-parsing of the child.
+     *
+     * @return a hash code representing the current state of this node
+     */
+    public long computeHash() {
+        // Use name and value for content-based hashing
+        String name = getName();
+        String value = getValue();
+        int childCount = getChildCount();
+
+        // Include type-specific descriptors so that a parent type change
+        // invalidates the child's hash and triggers re-parsing.
+        Object typeDescriptor = null;
+        if (this instanceof EditNodeObject) {
+            typeDescriptor = ((EditNodeObject) this).getJsonType();
+        } else if (this instanceof EditNodeProperty) {
+            typeDescriptor = ((EditNodeProperty) this).getJsonField();
+        }
+
+        // Combine all relevant factors into a single hash
+        // Using Objects.hash to create a stable hash from multiple values
+        // Objects.hash returns int, so we convert to long and ensure positive
+        int hash = Objects.hash(
+            editId,
+            name,
+            value,
+            childCount,
+            typeDescriptor
+        );
+        return (long) hash & 0xFFFFFFFFL; // Ensure positive long value
+    }
+
+    /**
+     * Checks if this node needs re-parsing based on its parse state.
+     *
+     * @return true if the node needs parsing (NONE or EDITED state)
+     */
+    public boolean needsParsing() {
+        return parseState == null || parseState.needsParsing();
+    }
+
     /**
      * Adds edit-related attributes to the provided map of JackAttribut objects.
      *
@@ -142,6 +242,8 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         attributes.put("|edit id", new JackAttribut("edit id", getEditId()));
         attributes.put("|edit status", new JackAttribut("edit status", getEditStatus().toString()));
         attributes.put("|edit message", new JackAttribut("edit message", getEditMessage()));
+        attributes.put("|parse state", new JackAttribut("parse state", getParseState().toString()));
+        attributes.put("|last parsed hash", new JackAttribut("last parsed hash", getLastParsedHash()));
         attributes.put("|child count", new JackAttribut("child count", children.size()));
         return attributes;
     }
@@ -466,13 +568,6 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      * @param totalWeight the total weight of all children
      */
     private void rangeRelabelingFor(int totalWeight) {
-//        System.out.println(totalWeight + "  &&&&&&&&&&&&&&&&  " + getClass().getSimpleName()
-//                + "[editId=" + getEditId()
-//                + ", leftRange=" + getLeftRange()
-//                + ", rightRange=" + getRightRange()
-//                + ", name=" + getName()
-//                + ", value=" + getValue()
-//                + ", type=" + getTypeKey() + "]");
         int size;
         EditNodeAbstract[] sortetArr;
         synchronized (sortedChildren) {

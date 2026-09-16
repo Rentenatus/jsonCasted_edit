@@ -42,17 +42,23 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
         // Traverse the tree to validate all object nodes
         validateObjectHierarchy(tree.getRoot(), descriptor, context, new HashSet<>());
     }
-    
+
     /**
      * Validates type hierarchy for object nodes.
      *
      * @param node the current node to validate
      * @param descriptor the model descriptor
      * @param context the validation context
-     * @param visitedTypes set to track visited types for cycle detection
+     * @param visited set of already-visited nodes for cycle detection
      */
-    private void validateObjectHierarchy(EditNodeAbstract node, JsonModelDescriptor descriptor, 
-                                         ValidationContext context, Set<String> visitedTypes) {
+    private void validateObjectHierarchy(EditNodeAbstract node, JsonModelDescriptor descriptor,
+                                         ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
         if (node instanceof EditNodeObject) {
             EditNodeObject objectNode = (EditNodeObject) node;
             JsonTypeDescriptor typeDescriptor = objectNode.getJsonType();
@@ -104,7 +110,7 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
         for (int i = 0; i < node.getChildCount(); i++) {
             EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeAbstract) {
-                validateObjectHierarchy((EditNodeAbstract) child, descriptor, context, visitedTypes);
+                validateObjectHierarchy((EditNodeAbstract) child, descriptor, context, visited);
             }
         }
     }
@@ -130,27 +136,23 @@ public class EditNodeTypeHierarchyValidator implements EditTreeValidator {
         
         // Add to visited set
         visited.add(typeName);
-        
-        try {
-            // Check parent type
-            JsonTypeDescriptor parentType = typeDescriptor.getParent();
-            if (parentType != null) {
-                if (hasCyclicInheritance(parentType, new HashSet<>(visited))) {
-                    return true;
-                }
+
+        // Check parent type
+        JsonTypeDescriptor parentType = typeDescriptor.getParent();
+        if (parentType != null) {
+            if (hasCyclicInheritance(parentType, new HashSet<>(visited))) {
+                return true;
             }
-            
-            // Check implementors (interfaces)
-            for (JsonTypeDescriptor implementor : typeDescriptor.getImplementors()) {
-                if (hasCyclicInheritance(implementor, new HashSet<>(visited))) {
-                    return true;
-                }
-            }
-            
-            return false;
-        } finally {
-            visited.remove(typeName);
         }
+
+        // Check implementors (interfaces)
+        for (JsonTypeDescriptor implementor : typeDescriptor.getImplementors()) {
+            if (hasCyclicInheritance(implementor, new HashSet<>(visited))) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     @Override

@@ -11,8 +11,10 @@ import de.jare.jsoncasted.editor.core.EditNodeAbstract;
 import de.jare.jsoncasted.editor.core.EditTree;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Main entry point for validation operations on EditTree.
@@ -57,7 +59,7 @@ public class EditValidationRunner {
         
         // If no descriptor is provided, we can only do limited validation
         if (descriptor == null) {
-            return validateWithoutModel(tree);
+            return new ValidationResult();
         }
         
         // Build the validator registry
@@ -68,7 +70,7 @@ public class EditValidationRunner {
         ValidationContext context = new ValidationContext(tree.getRoot(), descriptor, result);
         
         // Validate all nodes recursively
-        validateNodesRecursive(tree.getRoot(), registry, context);
+        validateNodesRecursive(tree.getRoot(), registry, context, new HashSet<>());
         
         // Apply tree validators
         for (EditTreeValidator validator : registry.getTreeValidators()) {
@@ -118,7 +120,7 @@ public class EditValidationRunner {
         Objects.requireNonNull(rootNode, "rootNode");
         
         if (descriptor == null) {
-            return validateSubtreeWithoutModel(rootNode);
+            return new ValidationResult();
         }
         
         ValidatorRegistry registry = buildRegistry();
@@ -126,7 +128,7 @@ public class EditValidationRunner {
         ValidationContext context = new ValidationContext(rootNode, descriptor, result);
         
         // Validate the subtree recursively
-        validateNodesRecursive(rootNode, registry, context);
+        validateNodesRecursive(rootNode, registry, context, new HashSet<>());
         
         return result;
     }
@@ -146,60 +148,43 @@ public class EditValidationRunner {
     
     /**
      * Recursively validates all nodes in the tree.
+     * Uses a visited set to detect and report cyclic node references
+     * instead of causing a StackOverflowError.
      *
      * @param node the current node to validate
      * @param registry the validator registry
      * @param context the validation context
+     * @param visited set of already-visited nodes for cycle detection
      */
-    private void validateNodesRecursive(EditNodeAbstract node, ValidatorRegistry registry, ValidationContext context) {
+    private void validateNodesRecursive(EditNodeAbstract node, ValidatorRegistry registry,
+                                        ValidationContext context, Set<EditNodeAbstract> visited) {
+        if (!visited.add(node)) {
+            context.addWarning("editnode.tree.cycle",
+                    "Cyclic node reference detected at node '" + node.getName() + "'",
+                    node);
+            return;
+        }
+
         // Track path
         context.pushPath(node);
-        
+
         try {
             // Apply all node validators
             for (EditNodeValidator validator : registry.getNodeValidators()) {
                 validator.validate(node, context);
             }
-            
+
             // Recursively validate children
             for (int i = 0; i < node.getChildCount(); i++) {
                 EditNode child = node.getChildAt(i);
                 if (child instanceof EditNodeAbstract) {
-                    validateNodesRecursive((EditNodeAbstract) child, registry, context);
+                    validateNodesRecursive((EditNodeAbstract) child, registry, context, visited);
                 }
             }
         } finally {
             // Always pop the path when done
             context.popPath();
         }
-    }
-    
-    /**
-     * Validates a tree without a model descriptor (limited validation).
-     * Only structural validators that don't require a model can run.
-     *
-     * @param tree the tree to validate
-     * @return the validation result
-     */
-    private ValidationResult validateWithoutModel(EditTree tree) {
-        ValidationResult result = new ValidationResult();
-        
-        // Without a model, we can only do limited validation
-        // For now, just return empty result
-        // Could be extended to do structural validation
-        
-        return result;
-    }
-    
-    /**
-     * Validates a subtree without a model descriptor.
-     *
-     * @param rootNode the root of the subtree
-     * @return the validation result
-     */
-    private ValidationResult validateSubtreeWithoutModel(EditNodeAbstract rootNode) {
-        // Similar to validateWithoutModel but for a subtree
-        return new ValidationResult();
     }
     
     /**

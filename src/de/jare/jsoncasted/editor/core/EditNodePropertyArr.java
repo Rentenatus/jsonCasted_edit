@@ -33,56 +33,20 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
 
     @Override
     public boolean tryAssignType(JsonModelDescriptor descriptor) {
-        if (descriptor == null) {
-            setEditStatus(EditStatus.STATELESS);
-            setEditMessage(null);
-            return false;
+        return super.tryAssignType(descriptor);
+    }
+
+    /**
+     * Array properties require the field to support array or list collection type.
+     */
+    @Override
+    protected boolean validateFieldType(JsonFieldDescriptor foundField, String fieldName, JsonTypeDescriptor parentType) {
+        if (foundField.isAsArray() || foundField.isAsListOrArray()) {
+            return true;
         }
-
-        // Pruefen: Hat Parent einen JsonTypeDescriptor?
-        EditNode parent = getParent();
-        if (!(parent instanceof EditNodeObject)) {
-            setEditStatus(EditStatus.WARNING);
-            setEditMessage("Cannot resolve field: parent has no type");
-            return false;
-        }
-
-        EditNodeObject parentObject = (EditNodeObject) parent;
-        JsonTypeDescriptor parentType = parentObject.getJsonType();
-
-        if (parentType == null) {
-            setEditStatus(EditStatus.WARNING);
-            setEditMessage("Cannot resolve field: parent has no type descriptor");
-            return false;
-        }
-
-        String fieldName = getName();
-        if (fieldName == null || fieldName.isEmpty()) {
-            setEditStatus(EditStatus.WARNING);
-            setEditMessage("Property has no name for field assignment");
-            return false;
-        }
-
-        // Suche nach dem Field im Parent-Typ
-        JsonFieldDescriptor foundField = parentType.getField(fieldName);
-
-        if (foundField != null) {
-            // Zusätzlich prüfen: Feld muss Array-Typ unterstützen
-            if (foundField.isAsArray() || foundField.isAsListOrArray()) {
-                setJsonField(foundField);
-                setEditStatus(EditStatus.OKAY);
-                setEditMessage(null);
-                return true;
-            } else {
-                setEditStatus(EditStatus.ERROR);
-                setEditMessage("Field '" + fieldName + "' in type '" + parentType.getTypeName() + "' is not an array type");
-                return false;
-            }
-        } else {
-            setEditStatus(EditStatus.ERROR);
-            setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName() + "'");
-            return false;
-        }
+        setEditStatus(EditStatus.ERROR);
+        setEditMessage("Field '" + fieldName + "' in type '" + parentType.getTypeName() + "' is not an array type");
+        return false;
     }
 
     /**

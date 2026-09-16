@@ -243,7 +243,10 @@ public class SetAttributeCommand extends AbstractEditCommand {
      *
      * @return array of old attribute maps
      */
+    @SuppressWarnings("unchecked")
     public Map<String, JackAttribut>[] getOldAttributes() {
+        // Generic array creation is not type-safe in Java;
+        // the array is populated immediately and not exposed mutably.
         Map<String, JackAttribut>[] attrs = new Map[entries.length];
         for (int i = 0; i < entries.length; i++) {
             attrs[i] = entries[i].oldAttributes;
@@ -256,7 +259,10 @@ public class SetAttributeCommand extends AbstractEditCommand {
      *
      * @return array of new attribute maps
      */
+    @SuppressWarnings("unchecked")
     public Map<String, JackAttribut>[] getNewAttributes() {
+        // Generic array creation is not type-safe in Java;
+        // the array is populated immediately and not exposed mutably.
         Map<String, JackAttribut>[] attrs = new Map[entries.length];
         for (int i = 0; i < entries.length; i++) {
             attrs[i] = entries[i].newAttributes;

@@ -28,7 +28,20 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private String objektValue;
     private String objektInfo;
     private String objektId;
-    private JsonTypeDescriptor jsonType;
+    private volatile JsonTypeDescriptor jsonType;
+
+    /**
+     * Cached name of the resolved type. When the parser successfully assigns
+     * a {@link JsonTypeDescriptor}, the type's name is stored here so that
+     * subsequent re-parses can use {@code descriptor.getType(castName)}
+     * (O(1) HashMap lookup) instead of falling through to the slower
+     * {@code getTypePerceptive(name)} lineare search.
+     * <p>
+     * This is especially useful when the node name differs from the type name
+     * (e.g. node "config1" vs. type "ConfigRoot").
+     * </p>
+     */
+    private volatile String castName;
 
     /**
      * Creates a new EditNodeObject with the specified value.
@@ -80,12 +93,14 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     @Override
     public void setName(String name) {
+        String oldName = this.objektValue;
         this.objektValue = name;
-        
-        // Trigger Typzuordnung neu, falls sich der Name ändert
+
+        // Notify parser listener about name change — this triggers
+        // asynchronous re-parsing via the parse queue.
         EditTree tree = getEditTree();
-        if (tree != null && tree.getJsonModelDescriptor() != null) {
-            tree.assignTypesForNode(this);
+        if (tree != null) {
+            tree.notifyNodeNameChanged(this, oldName, name);
         }
     }
 
@@ -136,6 +151,28 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         this.objektId = objektId;
     }
 
+    /**
+     * Returns the cached cast name of the resolved type, if any.
+     * This is the type name that was successfully used in a previous
+     * {@link #tryAssignType(JsonModelDescriptor)} call.
+     *
+     * @return the cast name, or {@code null} if not yet resolved
+     */
+    public String getCastName() {
+        return castName;
+    }
+
+    /**
+     * Sets the cached cast name. When set, {@link #tryAssignType} will
+     * try {@code descriptor.getType(castName)} first before falling
+     * back to the node name.
+     *
+     * @param castName the cast name to set, or {@code null} to clear
+     */
+    public void setCastName(String castName) {
+        this.castName = castName;
+    }
+
     @Override
     public boolean tryAssignType(JsonModelDescriptor descriptor) {
         if (descriptor == null) {
@@ -151,14 +188,28 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             return false;
         }
 
-        // Suche nach dem Typ im Modell (zuerst exakt, dann perceptiv)
-        JsonTypeDescriptor foundType = descriptor.getType(name);
+        // 1. Versuch: Cached castName (O(1) HashMap-Zugriff).
+        //    Wird beim ersten erfolgreichen Parsen gesetzt und beim
+        //    Re-Parse verwendet, solange sich der Name nicht geaendert hat.
+        JsonTypeDescriptor foundType = null;
+        if (castName != null) {
+            foundType = descriptor.getType(castName);
+        }
+
+        // 2. Versuch: Exakte Suche ueber den Node-Namen.
+        if (foundType == null) {
+            foundType = descriptor.getType(name);
+        }
+
+        // 3. Versuch: Perceptive Suche (lineare Suche, Fallback).
         if (foundType == null) {
             foundType = descriptor.getTypePerceptive(name);
         }
 
         if (foundType != null) {
             setJsonType(foundType);
+            // Cache fuer den naechsten Parse-Lauf pflegen.
+            setCastName(foundType.getTypeName());
             setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
@@ -227,6 +278,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             copy.addChildPhase1(deepCopy, copy.getChildCount());
             copy.addChildPhase2Fast(deepCopy);
         }
+        copy.setCastName(castName);
         return copy;
     }
 
@@ -261,6 +313,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("infotype", new JackAttribut("infotype", getObjektInfo()));
         attributes.put("objektId", new JackAttribut("objektId", getObjektId()));
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
+        attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
         return putEditAttributes(attributes);
     }
 
@@ -292,6 +345,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut typeAttr = props.get("jsonType");
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
+        }
+        JackAttribut castNameAttr = props.get("|cast name");
+        if (castNameAttr != null) {
+            setCastName((String) castNameAttr.getValue());
         }
     }
 

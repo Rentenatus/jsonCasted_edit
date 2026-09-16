@@ -168,7 +168,11 @@ public class ValidationResult {
                 result.computeIfAbsent(node, k -> new ArrayList<>()).add(diagnostic);
             }
         }
-        return result;
+        Map<EditNode, List<EditNodeDiagnostic>> immutable = new HashMap<>();
+        for (Map.Entry<EditNode, List<EditNodeDiagnostic>> entry : result.entrySet()) {
+            immutable.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        }
+        return Collections.unmodifiableMap(immutable);
     }
     
     /**
@@ -197,6 +201,15 @@ public class ValidationResult {
     public int getWarningCount() {
         return (int) diagnostics.stream().filter(EditNodeDiagnostic::isWarning).count();
     }
+
+    /**
+     * Returns the count of info diagnostics.
+     *
+     * @return the number of info diagnostics
+     */
+    public int getInfoCount() {
+        return (int) diagnostics.stream().filter(EditNodeDiagnostic::isInfo).count();
+    }
     
     /**
      * Clears all diagnostics from this result.
@@ -220,6 +233,7 @@ public class ValidationResult {
                 + "total=" + getTotalCount()
                 + ", errors=" + getErrorCount()
                 + ", warnings=" + getWarningCount()
+                + ", infos=" + getInfoCount()
                 + ", valid=" + isValid()
                 + "]";
     }

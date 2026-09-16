@@ -193,14 +193,15 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     }
 
     /**
-     * Versucht, den passenden Typ/Field aus dem Modell zuzuordnen. Setzt bei
-     * Erfolg den Deskriptor, bei Misserfolg den Edit-Status.
+     * Attempts to assign the matching type/field descriptor from the model.
+     * On success, sets the descriptor and OKAY status. On failure, sets
+     * an appropriate warning or error status.
      *
-     * @param descriptor Der aktuelle JsonModelDescriptor
-     * @return true wenn Zuordnung erfolgreich, false sonst
+     * @param descriptor the current JsonModelDescriptor
+     * @return true if assignment was successful, false otherwise
      */
     default boolean tryAssignType(JsonModelDescriptor descriptor) {
-        // Standardimplementierung: OKAY, kann von Subklassen überschrieben werden
+        // Default implementation: OKAY, can be overridden by subclasses
         this.setEditStatus(EditStatus.OKAY);
         this.setEditMessage(null);
         return true;
