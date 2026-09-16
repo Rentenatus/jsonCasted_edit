@@ -17,18 +17,18 @@ import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
-import de.jare.jsoncasted.model.JsonBuildException;
-import de.jare.jsonconfig.def.JsonConfigDefinition;
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_CLASS;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_LINK;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_MODEL;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_OBJECT_ID;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
+import de.jare.jsoncasted.model.JsonBuildException;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.def.JsonModelDescriptorDefinition;
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -104,7 +104,7 @@ public final class JsonTreeConverter {
         JsonModelDescriptor descriptor = null;
         if (descriptionFile != null) {
             try {
-                JsonConfigDefinition definition = JsonConfigDefinition.getInstance();
+                JsonModelDescriptorDefinition definition = JsonModelDescriptorDefinition.getInstance();
                 WoodResolution resolution = JsonParser.parse(descriptionFile, definition, definition.getRootClass());
                 descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
             } catch (JsonParseException | JsonBuildException | IOException | NullPointerException | ClassCastException ex) {

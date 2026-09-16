@@ -21,10 +21,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Service class for on-the-fly type parsing of EditTree nodes. Implements
- * TypeParserListener to receive notifications about node changes.
- *
- * <p>
+ * Service class for on-the-fly type parsing of EditTree nodes.Implements
+ TypeParserListener to receive notifications about node changes.<p>
  * This service uses a thread pool with 1-2 threads to process nodes from the
  * parse queue, performing type assignment based on the
  * {@link de.jare.jsoncasted.model.descriptor.JsonModelDescriptor} from the
