@@ -202,6 +202,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
         if (foundType != null) {
             setJsonType(foundType);
+            setCastName(foundType.getTypeName());
             setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
