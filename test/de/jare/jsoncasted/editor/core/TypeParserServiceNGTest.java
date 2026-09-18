@@ -118,8 +118,10 @@ public class TypeParserServiceNGTest {
             fail(ex.getMessage());
         }
 
-        // Initially, no parser service
-        assertNull(localTree.getParserService(), "Parser service should be null initially");
+        // fromJsonFile auto-starts the parser when a descriptor is found.
+        // Reset to a clean state so we can verify the auto-start contract below.
+        localTree.setParserService(null);
+        assertNull(localTree.getParserService(), "Parser service should be null after reset");
 
         // Set model descriptor - should auto-start parser
         localTree.setJsonModelDescriptor(modelDescriptor);

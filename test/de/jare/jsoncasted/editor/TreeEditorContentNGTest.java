@@ -515,12 +515,12 @@ public class TreeEditorContentNGTest implements ATestTools {
         // Names and values should be reverted, but read-only attributes remain
         assertEquals(treeNode1.getName(), "node1");
         assertEquals(treeNode1.getValue(), null);
-        assertEquals(treeNode1.getEditStatus(), "okay");
+        assertEquals(treeNode1.getEditStatus(), EditStatus.OKAY);
         assertEquals(treeNode1.getEditMessage(), "All good");
 
         assertEquals(treeNode2.getName(), "node2");
         assertEquals(treeNode2.getValue(), null);
-        assertEquals(treeNode2.getEditStatus(), "warning");
+        assertEquals(treeNode2.getEditStatus(), EditStatus.WARNING);
         assertEquals(treeNode2.getEditMessage(), "Needs attention");
 
         // Redo
@@ -529,7 +529,7 @@ public class TreeEditorContentNGTest implements ATestTools {
 
         assertEquals(treeNode1.getName(), "renamed1");
         assertEquals(treeNode1.getValue(), "value1");
-        assertEquals(treeNode1.getEditStatus(), "okay");
+        assertEquals(treeNode1.getEditStatus(), EditStatus.OKAY);
         assertEquals(treeNode1.getEditMessage(), "All good");
 
         printTestFooter();
