@@ -24,6 +24,7 @@ import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_OBJECT_ID;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
 import de.jare.jsoncasted.model.JsonBuildException;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import de.jare.jsoncasted.model.descriptor.def.JsonModelDescriptorDefinition;
 import java.io.File;
 import java.io.IOException;
@@ -119,6 +120,25 @@ public final class JsonTreeConverter {
         }
         retEditTree.setJsonModelDescriptor(descriptor);
         retEditTree.setDescriptionFilePath(descriptionFilePath);
+
+        // Wenn der Root-Knoten noch keinen castName hat (kein _class im JSON),
+        // versuchen wir hier, den Typ ueber den Deskriptor aufzuloesen.
+        // Der Root-Name ist der Dateiname ohne Extension.
+        if (descriptor != null) {
+            EditNodeAbstract root = retEditTree.getRoot();
+            if (root instanceof EditNodeObject rootObj
+                    && (rootObj.getCastName() == null || rootObj.getCastName().isEmpty())) {
+                String rootCast = descriptor.getRootNodeCast();
+                if (rootCast != null && !rootCast.isEmpty()) {
+                    JsonTypeDescriptor rootType = descriptor.getType(rootCast);
+                    if (rootType == null) {
+                        rootType = descriptor.getTypePerceptive(rootCast);
+                    }
+                    rootObj.setCastName(rootType.getTypeName());
+                }
+            }
+        }
+
         return retEditTree;
     }
 

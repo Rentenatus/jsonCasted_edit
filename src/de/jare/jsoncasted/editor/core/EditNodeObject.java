@@ -31,14 +31,16 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile JsonTypeDescriptor jsonType;
 
     /**
-     * Cached name of the resolved type. When the parser successfully assigns
-     * a {@link JsonTypeDescriptor}, the type's name is stored here so that
-     * subsequent re-parses can use {@code descriptor.getType(castName)}
-     * (O(1) HashMap lookup) instead of falling through to the slower
-     * {@code getTypePerceptive(name)} lineare search.
+     * Cast name extracted from the {@code TERM_CLASS} (_class) entry during
+     * JSON-to-EditNode conversion. Serves as the primary lookup key for type
+     * resolution in {@link #tryAssignType(JsonModelDescriptor)} so that the
+     * correct substructure can be parsed even when the node name differs from
+     * the type name (e.g. node "config1" vs. type "ConfigRoot").
      * <p>
-     * This is especially useful when the node name differs from the type name
-     * (e.g. node "config1" vs. type "ConfigRoot").
+     * May also be set by the parser's parent-type inference or root-type
+     * handling to cache an inferred type name for subsequent re-parses. Remains
+     * {@code null} when no {@code TERM_CLASS} was present and no inference has
+     * assigned a type.
      * </p>
      */
     private volatile String castName;
@@ -152,19 +154,20 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Returns the cached cast name of the resolved type, if any.
-     * This is the type name that was successfully used in a previous
-     * {@link #tryAssignType(JsonModelDescriptor)} call.
+     * Returns the cast name for this node. This is the {@code TERM_CLASS}
+     * content extracted during JSON conversion, or a type name set by the
+     * parser's inference logic. Used as the primary lookup key in
+     * {@link #tryAssignType(JsonModelDescriptor)}.
      *
-     * @return the cast name, or {@code null} if not yet resolved
+     * @return the cast name, or {@code null} if none was set
      */
     public String getCastName() {
         return castName;
     }
 
     /**
-     * Sets the cached cast name. When set, {@link #tryAssignType} will
-     * try {@code descriptor.getType(castName)} first before falling
+     * Sets the cast name. When set, {@link #tryAssignType} uses
+     * {@code descriptor.getType(castName)} as the primary lookup before falling
      * back to the node name.
      *
      * @param castName the cast name to set, or {@code null} to clear
@@ -181,41 +184,30 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             return false;
         }
 
-        String name = getName();
-        if (name == null || name.isEmpty()) {
+        // Primary search key: castName (from TERM_CLASS). 
+        // Fallback to the node name if no castName is available.
+        String cast = getCastName();
+        String lookupKey = (cast != null && !cast.isEmpty()) ? cast : getName();
+        if (lookupKey == null || lookupKey.isEmpty()) {
             setEditStatus(EditStatus.WARNING);
-            setEditMessage("Object node has no name for type assignment");
+            setEditMessage("Object node has no cast name or name for type assignment");
             return false;
         }
 
-        // 1. Versuch: Cached castName (O(1) HashMap-Zugriff).
-        //    Wird beim ersten erfolgreichen Parsen gesetzt und beim
-        //    Re-Parse verwendet, solange sich der Name nicht geaendert hat.
-        JsonTypeDescriptor foundType = null;
-        if (castName != null) {
-            foundType = descriptor.getType(castName);
-        }
+        JsonTypeDescriptor foundType = descriptor.getType(lookupKey);
 
-        // 2. Versuch: Exakte Suche ueber den Node-Namen.
-        if (foundType == null) {
-            foundType = descriptor.getType(name);
-        }
-
-        // 3. Versuch: Perceptive Suche (lineare Suche, Fallback).
-        if (foundType == null) {
-            foundType = descriptor.getTypePerceptive(name);
+        if (foundType == null) { // Fallback: try a more perceptive search (e.g., case-insensitive, partial match)
+            foundType = descriptor.getTypePerceptive(lookupKey);
         }
 
         if (foundType != null) {
             setJsonType(foundType);
-            // Cache fuer den naechsten Parse-Lauf pflegen.
-            setCastName(foundType.getTypeName());
             setEditStatus(EditStatus.OKAY);
             setEditMessage(null);
             return true;
         } else {
             setEditStatus(EditStatus.WARNING);
-            setEditMessage("Type '" + name + "' not found in model");
+            setEditMessage("Type '" + lookupKey + "' not found in model");
             return false;
         }
     }
@@ -351,7 +343,5 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             setCastName((String) castNameAttr.getValue());
         }
     }
-
-
 
 }
