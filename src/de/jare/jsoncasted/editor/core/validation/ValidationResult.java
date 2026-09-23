@@ -227,6 +227,23 @@ public class ValidationResult {
         return diagnostics.isEmpty();
     }
     
+    /**
+     * Returns a multi-line, human-readable rendering of this result. Every diagnostic is printed on its own line
+     * using its own toString, which already includes severity, code, source node and message.
+     *
+     * @return the pretty printed result, never null
+     */
+    public String prettyPrint() {
+        final StringBuilder sb = new StringBuilder("ValidationResult: ")
+                .append(getErrorCount()).append(" error(s), ")
+                .append(getWarningCount()).append(" warning(s), ")
+                .append(getInfoCount()).append(" info(s)");
+        for (EditNodeDiagnostic d : diagnostics) {
+            sb.append("\n  ").append(d);
+        }
+        return sb.toString();
+    }
+
     @Override
     public String toString() {
         return "ValidationResult["

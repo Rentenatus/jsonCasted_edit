@@ -242,8 +242,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         if (foundField != null) {
             if (validateFieldType(foundField, fieldName, parentType)) {
                 setJsonField(foundField);
-                setEditStatus(EditStatus.OKAY);
-                setEditMessage(null);
+                markOkay(descriptor);
                 return true;
             }
             return false;

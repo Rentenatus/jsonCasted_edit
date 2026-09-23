@@ -370,8 +370,7 @@ public class TypeParserService implements TypeParserListener {
             if (rootType != null) {
                 rootNode.setJsonType(rootType);
                 rootNode.setCastName(rootType.getTypeName());
-                rootNode.setEditStatus(EditStatus.OKAY);
-                rootNode.setEditMessage(null);
+                rootNode.markOkay(model);
                 typeAssigned = true;
             }
         }
@@ -470,8 +469,7 @@ public class TypeParserService implements TypeParserListener {
             JsonTypeDescriptor parentType = typesWithField.get(0);
             parentObject.setJsonType(parentType);
             parentObject.setCastName(parentType.getTypeName());
-            parentObject.setEditStatus(EditStatus.OKAY);
-            parentObject.setEditMessage(null);
+            parentObject.markOkay(model);
 
             // Mark parent as EDITED to trigger re-parsing
             parentObject.setParseState(ParseState.EDITED);
