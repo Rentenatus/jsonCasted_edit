@@ -19,7 +19,7 @@ public class EditValidationRunnerNGTest {
         EditTree tree = new EditTree("root");
         EditValidationRunner runner = new EditValidationRunner();
 
-        ValidationResult result = runner.validate(tree, null);
+        EditValidationResult result = runner.validate(tree, null);
         assertNotNull(result);
         assertTrue(result.isEmpty());
         assertTrue(result.isValid());
@@ -30,7 +30,7 @@ public class EditValidationRunnerNGTest {
         EditNodeObject node = new EditNodeObject("testNode");
         EditValidationRunner runner = new EditValidationRunner();
 
-        ValidationResult result = runner.validateSingleNode(node, null);
+        EditValidationResult result = runner.validateSingleNode(node, null);
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }
@@ -40,7 +40,7 @@ public class EditValidationRunnerNGTest {
         EditNodeObject root = new EditNodeObject("root");
         EditValidationRunner runner = new EditValidationRunner();
 
-        ValidationResult result = runner.validateSubtree(root, null);
+        EditValidationResult result = runner.validateSubtree(root, null);
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }

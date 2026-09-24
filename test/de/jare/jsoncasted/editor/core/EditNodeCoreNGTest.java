@@ -227,17 +227,19 @@ public class EditNodeCoreNGTest {
     @Test
     public void testPropertyTryAssignTypeParentNoTypeError() {
         EditNodeObject parent = new EditNodeObject("parent");
-        EditNodeProperty prop = new EditNodeProperty("level");
+        EditNodeProperty prop = new EditNodeProperty("comments");
         EditTimes weightMonitor = new EditTimes();
         parent.addChild(prop, weightMonitor);
 
         JsonModelDescriptor descriptor = de.jare.jsonconfig.def.JsonConfigDefinition.INSTANCE
                 .getModel().getOrCreateDescriptor();
-        // Parent has no type, so field resolution should fail with WARNING
+        // Parent has no type and the field is ambiguous (declared in 3 types),
+        // so no assignment happens - unique fields would be adopted blindly.
         boolean result = prop.tryAssignType(descriptor);
         assertFalse(result);
         // Either WARNING (parent has no type) or ERROR (field unknown)
         assertNotEquals(prop.getEditStatus(), EditStatus.OKAY);
+        assertNull(prop.getJsonField(), "Ambiguous field must not be assigned without a parent type");
     }
 
     // ========== ParseState enum tests ==========

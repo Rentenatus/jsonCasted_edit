@@ -32,6 +32,7 @@ public class EditTree {
     private TypeParserService parserService;
     private TypeParserListener parserListener;
     private final ConcurrentLinkedQueue<EditNodeAbstract> parseQueue = new ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.Semaphore parseQueueSignal = new java.util.concurrent.Semaphore(0);
     private final Set<EditNodeAbstract> pendingNodes = ConcurrentHashMap.newKeySet();
 
     /**
@@ -1051,6 +1052,8 @@ public class EditTree {
         pendingNodes.remove(node);
         pendingNodes.add(node);
         parseQueue.add(node);
+        // Signal the queue processor that a node is available
+        parseQueueSignal.release();
         // Update parse state to PENDING
         node.setParseState(ParseState.PENDING);
     }
@@ -1067,6 +1070,16 @@ public class EditTree {
         if (node != null) {
             pendingNodes.remove(node);
         }
+    }
+
+    /**
+     * Waits for the signal that a node was added to the parse queue, at most 500 milliseconds. Lets the queue
+     * processor idle without busy waiting and keeps it reactive for shutdown.
+     *
+     * @throws InterruptedException if the wait is interrupted
+     */
+    public void awaitParseSignal() throws InterruptedException {
+        parseQueueSignal.tryAcquire(500, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
     /**

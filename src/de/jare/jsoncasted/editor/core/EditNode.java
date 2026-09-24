@@ -193,6 +193,17 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     }
 
     /**
+     * Marks this node as OKAY and sets a confirmation message containing
+     * the model name. If no descriptor is available, the message stays empty.
+     *
+     * @param descriptor the model descriptor used for the assignment
+     */
+    default void markOkay(JsonModelDescriptor descriptor) {
+        this.setEditStatus(EditStatus.OKAY);
+        this.setEditMessage(descriptor == null ? null : "ok, model=" + descriptor.getModelName());
+    }
+
+    /**
      * Attempts to assign the matching type/field descriptor from the model.
      * On success, sets the descriptor and OKAY status. On failure, sets
      * an appropriate warning or error status.
@@ -202,8 +213,7 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
      */
     default boolean tryAssignType(JsonModelDescriptor descriptor) {
         // Default implementation: OKAY, can be overridden by subclasses
-        this.setEditStatus(EditStatus.OKAY);
-        this.setEditMessage(null);
+        this.markOkay(descriptor);
         return true;
     }
 

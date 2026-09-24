@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.model.JsonCollectionType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
@@ -23,8 +24,8 @@ import java.util.logging.Logger;
 /**
  * Service class for on-the-fly type parsing of EditTree nodes.Implements
  TypeParserListener to receive notifications about node changes.<p>
- * This service uses a thread pool with 1-2 threads to process nodes from the
- * parse queue, performing type assignment based on the
+ * This service uses a single parse worker to process nodes from the parse
+ * queue, performing type assignment based on the
  * {@link de.jare.jsoncasted.model.descriptor.JsonModelDescriptor} from the
  * tree. It is designed to be thread-safe and non-blocking for the UI.
  * </p>
@@ -34,7 +35,10 @@ import java.util.logging.Logger;
  * <ul>
  * <li>Implements {@link TypeParserListener} to receive change
  * notifications</li>
- * <li>Uses a fixed thread pool (2 threads) for concurrent processing</li>
+ * <li>Uses a single parse worker: parse runs are serialized, one node at a
+ * time. Parallel parsing bought nothing but races on shared state; the
+ * single worker acts as the parse permit with an inherent finally
+ * guarantee - a second parse can never overlap an in-flight one.</li>
  * <li>Takes nodes from the parse queue ({@link EditTree#getParseQueue()})</li>
  * <li>Uses the tree's JsonModelDescriptor for type inference</li>
  * <li>Updates ParseState on nodes (EDITED -> PENDING -> DONE)</li>
@@ -55,11 +59,12 @@ public class TypeParserService implements TypeParserListener {
     private static final Logger LOGGER = Logger.getLogger(TypeParserService.class.getName());
 
     /**
-     * Default number of threads in the parser thread pool. Using 2 threads
-     * allows for concurrent parsing while maintaining order through the queue
-     * mechanism.
+     * Default number of threads in the parser worker pool. One worker
+     * serializes the parse runs: while a node is being parsed, no second
+     * parse can start, which removes the races on shared state (node states,
+     * field map, requeue cascades) by concept instead of by lock.
      */
-    public static final int DEFAULT_THREAD_POOL_SIZE = 2;
+    public static final int DEFAULT_THREAD_POOL_SIZE = 1;
 
     /**
      * Timeout in seconds for graceful shutdown.
@@ -75,6 +80,11 @@ public class TypeParserService implements TypeParserListener {
      * Thread pool for executing parse tasks.
      */
     private ExecutorService executorService;
+
+    /**
+     * The queue processor thread, kept for a clean shutdown.
+     */
+    private Thread queueProcessor;
 
     /**
      * Flag indicating if the service is running.
@@ -142,7 +152,7 @@ public class TypeParserService implements TypeParserListener {
 
         // Start the queue processor thread that submits tasks to the pool
         // This allows us to control the rate at which nodes are processed
-        Thread queueProcessor = new Thread(this::processQueue, "TypeParserService-QueueProcessor");
+        queueProcessor = new Thread(this::processQueue, "TypeParserService-QueueProcessor");
         queueProcessor.setDaemon(true);
         queueProcessor.start();
     }
@@ -172,6 +182,17 @@ public class TypeParserService implements TypeParserListener {
                 Thread.currentThread().interrupt();
                 executorService.shutdownNow();
             }
+        }
+
+        // Interrupt and join the queue processor so it does not linger.
+        if (queueProcessor != null) {
+            queueProcessor.interrupt();
+            try {
+                queueProcessor.join(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            queueProcessor = null;
         }
     }
 
@@ -217,8 +238,9 @@ public class TypeParserService implements TypeParserListener {
                     if (!running.get() && editTree.getParseQueue().isEmpty()) {
                         break; // Stop if not running and queue is empty
                     }
-                    // Sleep briefly to avoid busy waiting
-                    Thread.sleep(10);
+                    // Wait for the parse signal of the next enqueue instead of
+                    // burning cycles in a sleep poll.
+                    editTree.awaitParseSignal();
                     continue;
                 }
 
@@ -345,6 +367,36 @@ public class TypeParserService implements TypeParserListener {
             oldType = ((EditNodeObject) node).getJsonType();
         }
 
+        // Element type propagation: object nodes under a collection property
+        // (LIST/ARRAY) or under a single-object field take the element type
+        // from the property's field descriptor, as long as they carry no
+        // explicit cast name of their own. This types the anonymous "Object"
+        // nodes the tree converter creates for nested values: array elements
+        // and object-valued single fields alike. Single fields only
+        // propagate when the element type is not primitive - object children
+        // under a primitive field are not the converter's doing.
+        if (node instanceof EditNodeObject && node.getParent() instanceof EditNodeProperty) {
+            final EditNodeObject elementNode = (EditNodeObject) node;
+            final EditNodeProperty containingProperty = (EditNodeProperty) node.getParent();
+            final JsonFieldDescriptor containingField = containingProperty.getJsonField();
+            if ((elementNode.getCastName() == null || elementNode.getCastName().isEmpty()
+                    || elementNode.getCastName().equals(elementNode.getName()))
+                    && containingField != null
+                    && containingField.getCollectionType() != null) {
+                final JsonTypeDescriptor elementType = model.getType(containingField.getTypeName());
+                if (elementType != null
+                        && (containingField.getCollectionType() != JsonCollectionType.NONE
+                        || !elementType.isPrimitive())) {
+                    elementNode.setCastName(elementType.getTypeName());
+                }
+            }
+        }
+
+        // Capture the old field of a property to detect field changes for the
+        // element cascade below.
+        JsonFieldDescriptor oldField = (node instanceof EditNodeProperty)
+                ? ((EditNodeProperty) node).getJsonField() : null;
+
         // Perform type assignment using the existing tryAssignType method.
         // tryAssignType handles its own errors via EditStatus and never throws.
         boolean typeAssigned;
@@ -370,8 +422,7 @@ public class TypeParserService implements TypeParserListener {
             if (rootType != null) {
                 rootNode.setJsonType(rootType);
                 rootNode.setCastName(rootType.getTypeName());
-                rootNode.setEditStatus(EditStatus.OKAY);
-                rootNode.setEditMessage(null);
+                rootNode.markOkay(model);
                 typeAssigned = true;
             }
         }
@@ -391,14 +442,26 @@ public class TypeParserService implements TypeParserListener {
             }
         }
 
-        // For EditNodeObject: try to infer parent type based on field name
-        if (typeAssigned && node instanceof EditNodeObject) {
+        // If a property received its field anew, re-queue its children (the
+        // collection elements) so they can adopt the element type.
+        if (node instanceof EditNodeProperty
+                && ((EditNodeProperty) node).getJsonField() != oldField
+                && node.getChildCount() > 0) {
+            queueChildrenForReparse(node);
+        }
+
+        // For EditNodeObject without an explicit cast decision: try to infer
+        // the node's own type from the field names of its property children
+        // (set coverage). This runs even after a failed name-based
+        // assignment - a node whose cast still equals its name carries no
+        // explicit decision and is exactly what inference is for.
+        if (node instanceof EditNodeObject && hasNoExplicitCast((EditNodeObject) node)) {
             try {
-                tryInferParentTypes((EditNodeObject) node, model);
+                tryInferOwnType((EditNodeObject) node, model);
             } catch (Exception e) {
-                // tryInferParentTypes is best-effort; if it fails the node
-                // is still parsed, just without parent type inference.
-                LOGGER.log(Level.FINE, "tryInferParentTypes failed for node [editId="
+                // Inference is best-effort; if it fails the node is still
+                // parsed, just without inferred type.
+                LOGGER.log(Level.FINE, "tryInferOwnType failed for node [editId="
                         + node.getEditId() + "]: " + e.getMessage(), e);
             }
         }
@@ -422,114 +485,87 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Attempts to infer parent types for EditNodeObject nodes. If a child node
-     * has a unique field name in the model, and the parent has no type, the
-     * parent's type is set to the type that contains this field.
+     * Checks whether the node carries no explicit cast decision of its own: no type at all, or a cast that is still
+     * identical to the node name (the anonymous converter naming). Only such nodes are candidates for type
+     * inference - a propagated or manually set cast is an explicit decision.
      *
-     * <p>
-     * This implements the automatic type derivation feature: when a field name
-     * is unique in the model and the parent node has no type, we set the
-     * parent's type and trigger re-parsing of the parent.
-     * </p>
-     *
-     * @param node the EditNodeObject that was just parsed
-     * @param model the JsonModelDescriptor to use for type lookups
+     * @param node the object node to check
+     * @return true if the node has no explicit cast decision
      */
-    private void tryInferParentTypes(EditNodeObject node, JsonModelDescriptor model) {
-        // Get the parent node
-        EditNode parent = node.getParent();
-        if (!(parent instanceof EditNodeObject)) {
-            return; // Parent is not an object, cannot have type descriptor
-        }
-
-        EditNodeObject parentObject = (EditNodeObject) parent;
-
-        // If parent already has a type, no need to infer
-        if (parentObject.getJsonType() != null) {
-            return;
-        }
-
-        // Get the node's name (which is the field name in the parent)
-        String fieldName = node.getName();
-        if (fieldName == null || fieldName.isEmpty()) {
-            return;
-        }
-
-        // Find all types in the model that have a field with this name
-        List<JsonTypeDescriptor> typesWithField = getTypesContainingField(model, fieldName);
-
-        if (typesWithField.isEmpty()) {
-            // No types found with this field name
-            parentObject.setEditStatus(EditStatus.WARNING);
-            parentObject.setEditMessage("No type found containing field '" + fieldName + "'");
-            return;
-        }
-
-        if (typesWithField.size() == 1) {
-            // Unique match - set the parent's type
-            JsonTypeDescriptor parentType = typesWithField.get(0);
-            parentObject.setJsonType(parentType);
-            parentObject.setCastName(parentType.getTypeName());
-            parentObject.setEditStatus(EditStatus.OKAY);
-            parentObject.setEditMessage(null);
-
-            // Mark parent as EDITED to trigger re-parsing
-            parentObject.setParseState(ParseState.EDITED);
-            editTree.addToParseQueue(parentObject);
-
-            // Re-queue all children of the parent so their fields can be
-            // resolved against the newly assigned parent type.
-            queueChildrenForReparse(parentObject);
-
-        } else {
-            // Multiple types found - ambiguous field name
-            parentObject.setEditStatus(EditStatus.WARNING);
-            parentObject.setEditMessage("Field '" + fieldName + "' is ambiguous (found in "
-                    + typesWithField.size() + " types)");
-        }
+    private boolean hasNoExplicitCast(EditNodeObject node) {
+        return node.getJsonType() == null
+                || node.getCastName() == null
+                || node.getCastName().isEmpty()
+                || node.getCastName().equals(node.getName());
     }
 
     /**
-     * Finds all type descriptors in the model that contain a field with the
-     * specified name. This is used for parent type inference when a child
-     * node's name matches a field.
+     * Attempts to infer the type of an untyped EditNodeObject from the field names of its property children. The
+     * candidates are the types declaring ALL of these fields (set coverage); if exactly one type covers the whole
+     * set, it is assigned, the node is re-queued for a clean parse and its children are re-queued so their fields
+     * resolve against the inferred type. This replaces the former single-name parent inference: a field set is far
+     * more selective than one field name, so combinations like level+path resolve even when each name alone is
+     * ambiguous.
      *
-     * @param model the JsonModelDescriptor to search
-     * @param fieldName the field name to search for
-     * @return list of JsonTypeDescriptor that have a field with the given name
+     * @param node the untyped EditNodeObject whose type should be inferred
+     * @param model the JsonModelDescriptor to use for type lookups
      */
-    private List<JsonTypeDescriptor> getTypesContainingField(JsonModelDescriptor model, String fieldName) {
-        List<JsonTypeDescriptor> result = new ArrayList<>();
-
-        if (model == null || fieldName == null || fieldName.isEmpty()) {
-            return result;
-        }
-
-        try {
-            // Fast existence pre-check via the cached field map.
-            // Each entry groups all field descriptors sharing a name across the model,
-            // so an absent entry means no type declares the field anywhere.
-            Map<String, List<JsonFieldDescriptor>> fieldMap = model.getOrCreateFieldMap();
-            List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
-            if (knownFields == null || knownFields.isEmpty()) {
-                return result;
-            }
-
-            // Collect the types that actually declare this field.
-            for (JsonTypeDescriptor type : model.getTypes()) {
-                if (type == null) {
-                    continue;
-                }
-                if (type.getField(fieldName) != null) {
-                    result.add(type);
+    private void tryInferOwnType(EditNodeObject node, JsonModelDescriptor model) {
+        // Collect the field names of the property children.
+        final List<String> fieldNames = new ArrayList<>();
+        for (int i = 0; i < node.getChildCount(); i++) {
+            final EditNode child = node.getChildAt(i);
+            if (child instanceof EditNodeProperty) {
+                final String fieldName = child.getName();
+                if (fieldName != null && !fieldName.isEmpty()) {
+                    fieldNames.add(fieldName);
                 }
             }
-        } catch (Exception e) {
-            LOGGER.log(Level.FINE, "getTypesContainingField failed for field '"
-                    + fieldName + "': " + e.getMessage(), e);
+        }
+        if (fieldNames.isEmpty()) {
+            return; // nothing to infer from
         }
 
-        return result;
+        // Candidates: the types declaring ALL of the field names, via the
+        // O(1) type index of the model descriptor.
+        final Map<String, List<JsonTypeDescriptor>> typesByField = model.getOrCreateTypesByField();
+        List<JsonTypeDescriptor> candidates = null;
+        for (String fieldName : fieldNames) {
+            final List<JsonTypeDescriptor> declaring = typesByField.get(fieldName);
+            if (declaring == null || declaring.isEmpty()) {
+                return; // unknown field: no guessing
+            }
+            if (candidates == null) {
+                candidates = new ArrayList<>(declaring);
+            } else {
+                candidates.retainAll(declaring);
+            }
+            if (candidates.isEmpty()) {
+                // Field combination fits no type: the property children
+                // report the mismatch themselves - no inference.
+                return;
+            }
+        }
+
+        if (candidates == null || candidates.size() != 1) {
+            if (candidates != null && candidates.size() > 1) {
+                node.setEditStatus(EditStatus.WARNING);
+                node.setEditMessage("Type is ambiguous by fields " + fieldNames
+                        + " (" + candidates.size() + " candidate types)");
+            }
+            return;
+        }
+
+        final JsonTypeDescriptor inferred = candidates.get(0);
+        node.setJsonType(inferred);
+        node.setCastName(inferred.getTypeName());
+        node.markOkay(model);
+
+        // Re-queue the node (the hash now includes cast and type) and its
+        // children so their fields resolve against the inferred type.
+        node.setParseState(ParseState.EDITED);
+        editTree.addToParseQueue(node);
+        queueChildrenForReparse(node);
     }
 
     // ========== TypeParserListener Implementation ==========

@@ -25,7 +25,7 @@ public class ValidationContext {
 
     private final EditNodeAbstract rootNode;
     private final JsonModelDescriptor modelDescriptor;
-    private final ValidationResult result;
+    private final EditValidationResult result;
     private final ArrayDeque<EditNode> path;
 
     /**
@@ -37,7 +37,7 @@ public class ValidationContext {
      */
     public ValidationContext(EditNodeAbstract rootNode,
             JsonModelDescriptor modelDescriptor,
-            ValidationResult result) {
+            EditValidationResult result) {
         this.rootNode = Objects.requireNonNull(rootNode, "rootNode");
         this.modelDescriptor = modelDescriptor;
         this.result = Objects.requireNonNull(result, "result");
@@ -67,7 +67,7 @@ public class ValidationContext {
      *
      * @return the validation result
      */
-    public ValidationResult getResult() {
+    public EditValidationResult getResult() {
         return result;
     }
 
