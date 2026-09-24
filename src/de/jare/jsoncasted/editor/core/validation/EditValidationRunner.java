@@ -54,19 +54,19 @@ public class EditValidationRunner {
      * @param descriptor the model descriptor to validate against
      * @return the validation result containing all diagnostics
      */
-    public ValidationResult validate(EditTree tree, JsonModelDescriptor descriptor) {
+    public EditValidationResult validate(EditTree tree, JsonModelDescriptor descriptor) {
         Objects.requireNonNull(tree, "tree");
         
         // If no descriptor is provided, we can only do limited validation
         if (descriptor == null) {
-            return new ValidationResult();
+            return new EditValidationResult();
         }
         
         // Build the validator registry
         ValidatorRegistry registry = buildRegistry();
         
         // Create context
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         ValidationContext context = new ValidationContext(tree.getRoot(), descriptor, result);
         
         // Validate all nodes recursively
@@ -87,15 +87,15 @@ public class EditValidationRunner {
      * @param descriptor the model descriptor to validate against
      * @return the validation result for this node
      */
-    public ValidationResult validateSingleNode(EditNodeAbstract node, JsonModelDescriptor descriptor) {
+    public EditValidationResult validateSingleNode(EditNodeAbstract node, JsonModelDescriptor descriptor) {
         Objects.requireNonNull(node, "node");
         
         if (descriptor == null) {
-            return new ValidationResult(); // No model, no validation possible
+            return new EditValidationResult(); // No model, no validation possible
         }
         
         ValidatorRegistry registry = buildRegistry();
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         ValidationContext context = new ValidationContext(node, descriptor, result);
         
         // Create a temporary path with just this node
@@ -116,15 +116,15 @@ public class EditValidationRunner {
      * @param descriptor the model descriptor to validate against
      * @return the validation result for the subtree
      */
-    public ValidationResult validateSubtree(EditNodeAbstract rootNode, JsonModelDescriptor descriptor) {
+    public EditValidationResult validateSubtree(EditNodeAbstract rootNode, JsonModelDescriptor descriptor) {
         Objects.requireNonNull(rootNode, "rootNode");
         
         if (descriptor == null) {
-            return new ValidationResult();
+            return new EditValidationResult();
         }
         
         ValidatorRegistry registry = buildRegistry();
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         ValidationContext context = new ValidationContext(rootNode, descriptor, result);
         
         // Validate the subtree recursively

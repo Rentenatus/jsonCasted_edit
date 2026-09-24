@@ -8,6 +8,8 @@ package de.jare.jsoncasted.editor.core.validation;
 
 import de.jare.jsoncasted.editor.core.EditNode;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.validation.core.Diagnostic;
+import de.jare.jsoncasted.validation.core.Severity;
 import java.util.Objects;
 
 /**
@@ -17,7 +19,7 @@ import java.util.Objects;
  *
  * @author Janusch Rentenatus
  */
-public class EditNodeDiagnostic {
+public class EditNodeDiagnostic implements Diagnostic {
     
     private final Severity severity;
     private final String code;
@@ -175,6 +177,16 @@ public class EditNodeDiagnostic {
         return severity == Severity.INFO;
     }
     
+    /**
+     * Returns a single-line rendering with the source node name.
+     *
+     * @return the rendering, never null
+     */
+    @Override
+    public String prettyLine() {
+        return toString();
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

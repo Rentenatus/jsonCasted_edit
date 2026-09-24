@@ -15,7 +15,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testPathStringRootToCurrentOrder() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -39,7 +39,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testPeekPath() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -59,7 +59,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testClearPath() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -74,7 +74,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testGetPathImmutable() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -90,7 +90,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testAddErrorDelegatesToResult() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -101,7 +101,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testAddWarningDelegatesToResult() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -112,7 +112,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testAddInfoDelegatesToResult() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("root");
         ValidationContext context = new ValidationContext(root, null, result);
 
@@ -123,7 +123,7 @@ public class ValidationContextNGTest {
 
     @Test
     public void testGetRootNode() {
-        ValidationResult result = new ValidationResult();
+        EditValidationResult result = new EditValidationResult();
         EditNodeObject root = new EditNodeObject("rootNode");
         ValidationContext context = new ValidationContext(root, null, result);
 

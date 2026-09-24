@@ -6,31 +6,32 @@ import org.testng.annotations.Test;
 import static org.testng.Assert.*;
 
 /**
- * Tests for ValidationResult: diagnostic counting, immutability of
+ * Tests for EditValidationResult: diagnostic counting, immutability of
  * getDiagnosticsByNode, and toString output.
  *
  * @author Janusch Rentenatus
  */
-public class ValidationResultNGTest {
+public class EditValidationResultNGTest {
 
-    private ValidationResult result;
+    private EditValidationResult result;
 
     @BeforeMethod
     public void setUp() {
-        result = new ValidationResult();
+        result = new EditValidationResult();
     }
 
     @Test
     public void testEmptyResult() {
         assertTrue(result.isEmpty());
-        assertEquals(result.getTotalCount(), 0);
+        assertEquals(result.getDiagnosticCount(), 0);
         assertEquals(result.getErrorCount(), 0);
         assertEquals(result.getWarningCount(), 0);
         assertEquals(result.getInfoCount(), 0);
         assertTrue(result.isValid());
+        assertTrue(result.isClean());
         assertFalse(result.hasErrors());
         assertFalse(result.hasWarnings());
-        assertFalse(result.hasInfo());
+        assertFalse(result.hasInfos());
     }
 
     @Test
@@ -39,7 +40,7 @@ public class ValidationResultNGTest {
         result.add(EditNodeDiagnostic.error("err.code", "Error message", node, null));
 
         assertFalse(result.isEmpty());
-        assertEquals(result.getTotalCount(), 1);
+        assertEquals(result.getDiagnosticCount(), 1);
         assertEquals(result.getErrorCount(), 1);
         assertEquals(result.getWarningCount(), 0);
         assertEquals(result.getInfoCount(), 0);
@@ -52,7 +53,7 @@ public class ValidationResultNGTest {
         EditNodeObject node = new EditNodeObject("testNode");
         result.add(EditNodeDiagnostic.warning("warn.code", "Warning message", node, null));
 
-        assertEquals(result.getTotalCount(), 1);
+        assertEquals(result.getDiagnosticCount(), 1);
         assertEquals(result.getErrorCount(), 0);
         assertEquals(result.getWarningCount(), 1);
         assertTrue(result.hasWarnings());
@@ -64,9 +65,9 @@ public class ValidationResultNGTest {
         EditNodeObject node = new EditNodeObject("testNode");
         result.add(EditNodeDiagnostic.info("info.code", "Info message", node, null));
 
-        assertEquals(result.getTotalCount(), 1);
+        assertEquals(result.getDiagnosticCount(), 1);
         assertEquals(result.getInfoCount(), 1);
-        assertTrue(result.hasInfo());
+        assertTrue(result.hasInfos());
         assertTrue(result.isValid());
     }
 
@@ -78,10 +79,13 @@ public class ValidationResultNGTest {
         result.add(EditNodeDiagnostic.info("i1", "info", node, null));
         result.add(EditNodeDiagnostic.error("e2", "err2", node, null));
 
-        assertEquals(result.getTotalCount(), 4);
+        assertEquals(result.getDiagnosticCount(), 4);
         assertEquals(result.getErrorCount(), 2);
         assertEquals(result.getWarningCount(), 1);
         assertEquals(result.getInfoCount(), 1);
+        assertEquals(result.getErrors().size(), 2);
+        assertEquals(result.getWarnings().size(), 1);
+        assertEquals(result.getInfos().size(), 1);
     }
 
     @Test
@@ -123,20 +127,29 @@ public class ValidationResultNGTest {
         result.add(EditNodeDiagnostic.info("i1", "info", node, null));
 
         String str = result.toString();
-        assertTrue(str.contains("errors=1"));
-        assertTrue(str.contains("warnings=1"));
-        assertTrue(str.contains("infos=1"));
-        assertTrue(str.contains("total=3"));
+        assertTrue(str.contains("errorCount=1"), str);
+        assertTrue(str.contains("warningCount=1"), str);
+        assertTrue(str.contains("infoCount=1"), str);
+        assertTrue(str.contains("total=3"), str);
+    }
+
+    @Test
+    public void testPrettyPrintContainsNodeNames() {
+        EditNodeObject node = new EditNodeObject("testNode");
+        result.add(EditNodeDiagnostic.error("e1", "err", node, null));
+
+        String str = result.prettyPrint();
+        assertTrue(str.contains("[ERROR] e1 at testNode: err"), str);
     }
 
     @Test
     public void testClear() {
         EditNodeObject node = new EditNodeObject("testNode");
         result.add(EditNodeDiagnostic.error("e1", "err", node, null));
-        assertEquals(result.getTotalCount(), 1);
+        assertEquals(result.getDiagnosticCount(), 1);
 
         result.clear();
         assertTrue(result.isEmpty());
-        assertEquals(result.getTotalCount(), 0);
+        assertEquals(result.getDiagnosticCount(), 0);
     }
 }
