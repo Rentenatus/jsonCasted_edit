@@ -202,10 +202,14 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         int childCount = getChildCount();
 
         // Include type-specific descriptors so that a parent type change
-        // invalidates the child's hash and triggers re-parsing.
+        // invalidates the child's hash and triggers re-parsing. For object
+        // nodes the cast name is the primary parsing input and therefore
+        // part of the hash as well.
         Object typeDescriptor = null;
+        String castName = null;
         if (this instanceof EditNodeObject) {
             typeDescriptor = ((EditNodeObject) this).getJsonType();
+            castName = ((EditNodeObject) this).getCastName();
         } else if (this instanceof EditNodeProperty) {
             typeDescriptor = ((EditNodeProperty) this).getJsonField();
         }
@@ -218,7 +222,8 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
             name,
             value,
             childCount,
-            typeDescriptor
+            typeDescriptor,
+            castName
         );
         return (long) hash & 0xFFFFFFFFL; // Ensure positive long value
     }

@@ -224,16 +224,21 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             return false;
         }
 
-        // 2. Parent hat noch keinen Typ - Mehrdeutigkeit mit Kontext melden.
+        // 2. Parent ohne Typ: eindeutige Felder befruchten den Knoten blind,
+        //    mehrdeutige bleiben mit Kontext-Warnung liegen. Eine spaetere
+        //    Typkorrektur des Parents re-parsed diesen Knoten und loest das
+        //    Feld dann sauber gegen den Parent-Typ auf.
         if (parentType == null) {
-            setEditStatus(EditStatus.WARNING);
             if (knownFields.size() == 1) {
+                setJsonField(knownFields.get(0));
+                setEditStatus(EditStatus.WARNING);
                 setEditMessage("Parent has no type descriptor; field '" + fieldName
-                        + "' is unique in the model");
-            } else {
-                setEditMessage("Parent has no type descriptor; field '" + fieldName
-                        + "' is ambiguous (declared in " + knownFields.size() + " types)");
+                        + "' was adopted as unique in the model");
+                return true;
             }
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Parent has no type descriptor; field '" + fieldName
+                    + "' is ambiguous (declared in " + knownFields.size() + " types)");
             return false;
         }
 
@@ -248,7 +253,20 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             return false;
         }
 
-        // Feld existiert im Modell, aber nicht im Parent-Typ - Kontext liefern.
+        // 4. Feld existiert im Modell, aber nicht im Parent-Typ: eindeutige
+        //    Felder werden blind uebernommen (mit Hinweis auf den fehlenden
+        //    Kontext), mehrdeutige werden als Fehler gegen den Parent gemeldet.
+        //    Hinweis: Die Blind-Uebernahme prueft den Wert bewusst nicht
+        //    (validateFieldType bleibt aus); die Validierung laeuft nach,
+        //    sobald der Parent-Kontext eintrifft und der Korrekturkreis den
+        //    Knoten neu parst.
+        if (knownFields.size() == 1) {
+            setJsonField(knownFields.get(0));
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Field '" + fieldName + "' is unique in the model and was adopted,"
+                    + " but is not declared in type '" + parentType.getTypeName() + "'");
+            return true;
+        }
         List<String> declaringTypeNames = collectDeclaringTypeNames(descriptor, fieldName);
         setEditStatus(EditStatus.ERROR);
         setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName()

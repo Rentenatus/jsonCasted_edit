@@ -173,7 +173,16 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      * @param castName the cast name to set, or {@code null} to clear
      */
     public void setCastName(String castName) {
+        final String oldCast = this.castName;
         this.castName = castName;
+
+        // Notify parser listener about a cast change - the cast name is the
+        // primary parsing input for object nodes, so a changed cast must
+        // trigger asynchronous re-parsing via the parse queue.
+        EditTree tree = getEditTree();
+        if (tree != null && !java.util.Objects.equals(oldCast, castName)) {
+            tree.notifyTypeDescriptorChanged(this);
+        }
     }
 
     @Override
