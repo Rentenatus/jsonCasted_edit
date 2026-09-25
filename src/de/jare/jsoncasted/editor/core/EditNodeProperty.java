@@ -8,7 +8,11 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,7 +37,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     private String propName;
     private String primValue;
     private JsonNodeType type;
-    private JsonFieldDescriptor jsonField;
+    private volatile JsonFieldDescriptor jsonField;
 
     /**
      * Creates a new EditNodeProperty with the specified name and NULL type.
@@ -89,7 +93,15 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     @Override
     public void setName(String name) {
+        String oldName = this.propName;
         this.propName = name;
+
+        // Notify parser listener about name change — this triggers
+        // asynchronous re-parsing via the parse queue.
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyNodeNameChanged(this, oldName, name);
+        }
     }
 
     // ========== JsonTreeNodeData methods ==========
@@ -121,7 +133,14 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
 
     @Override
     public void setValue(String value) {
+        String oldValue = this.primValue;
         this.primValue = value;
+        
+        // Notify parser listener about value change
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyNodeValueChanged(this, oldValue, value);
+        }
     }
 
     /**
@@ -140,6 +159,13 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setType(JsonNodeType type) {
         this.type = type;
+
+        // Notify parser listener about type change — this triggers
+        // asynchronous re-parsing via the parse queue.
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyTypeDescriptorChanged(this);
+        }
     }
 
     /**
@@ -158,6 +184,131 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setJsonField(JsonFieldDescriptor jsonField) {
         this.jsonField = jsonField;
+    }
+
+    @Override
+    public boolean tryAssignType(JsonModelDescriptor descriptor) {
+        if (descriptor == null) {
+            setEditStatus(EditStatus.STATELESS);
+            setEditMessage(null);
+            return false;
+        }
+
+        // Pruefen: Hat Parent einen JsonTypeDescriptor?
+        EditNode parent = getParent();
+        if (!(parent instanceof EditNodeObject)) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Cannot resolve field: parent has no type");
+            return false;
+        }
+
+        EditNodeObject parentObject = (EditNodeObject) parent;
+        JsonTypeDescriptor parentType = parentObject.getJsonType();
+
+        String fieldName = getName();
+        if (fieldName == null || fieldName.isEmpty()) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Property has no name for field assignment");
+            return false;
+        }
+
+        // 1. Schnelle Existenzpruefung ueber die gesamte Modell-Feldkarte.
+        //    Jeder Eintrag fasst alle Felddefinitionen gleichen Namens zusammen,
+        //    die Listengroesse ist also die Anzahl der Typen, die das Feld
+        //    deklarieren (Mass fuer Mehrdeutigkeit).
+        Map<String, List<JsonFieldDescriptor>> fieldMap = descriptor.getOrCreateFieldMap();
+        List<JsonFieldDescriptor> knownFields = fieldMap.get(fieldName);
+        if (knownFields == null || knownFields.isEmpty()) {
+            setEditStatus(EditStatus.ERROR);
+            setEditMessage("Field '" + fieldName + "' is unknown in model '" + descriptor.getModelName() + "'");
+            return false;
+        }
+
+        // 2. Parent ohne Typ: eindeutige Felder befruchten den Knoten blind,
+        //    mehrdeutige bleiben mit Kontext-Warnung liegen. Eine spaetere
+        //    Typkorrektur des Parents re-parsed diesen Knoten und loest das
+        //    Feld dann sauber gegen den Parent-Typ auf.
+        if (parentType == null) {
+            if (knownFields.size() == 1) {
+                setJsonField(knownFields.get(0));
+                setEditStatus(EditStatus.WARNING);
+                setEditMessage("Parent has no type descriptor; field '" + fieldName
+                        + "' was adopted as unique in the model");
+                return true;
+            }
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Parent has no type descriptor; field '" + fieldName
+                    + "' is ambiguous (declared in " + knownFields.size() + " types)");
+            return false;
+        }
+
+        // 3. Feld innerhalb des Parent-Typs aufloesen.
+        JsonFieldDescriptor foundField = parentType.getField(fieldName);
+        if (foundField != null) {
+            if (validateFieldType(foundField, fieldName, parentType)) {
+                setJsonField(foundField);
+                markOkay(descriptor);
+                return true;
+            }
+            return false;
+        }
+
+        // 4. Feld existiert im Modell, aber nicht im Parent-Typ: eindeutige
+        //    Felder werden blind uebernommen (mit Hinweis auf den fehlenden
+        //    Kontext), mehrdeutige werden als Fehler gegen den Parent gemeldet.
+        //    Hinweis: Die Blind-Uebernahme prueft den Wert bewusst nicht
+        //    (validateFieldType bleibt aus); die Validierung laeuft nach,
+        //    sobald der Parent-Kontext eintrifft und der Korrekturkreis den
+        //    Knoten neu parst.
+        if (knownFields.size() == 1) {
+            setJsonField(knownFields.get(0));
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Field '" + fieldName + "' is unique in the model and was adopted,"
+                    + " but is not declared in type '" + parentType.getTypeName() + "'");
+            return true;
+        }
+        List<String> declaringTypeNames = collectDeclaringTypeNames(descriptor, fieldName);
+        setEditStatus(EditStatus.ERROR);
+        setEditMessage("Field '" + fieldName + "' not found in type '" + parentType.getTypeName()
+                + "' (declared in " + declaringTypeNames.size() + " type(s): "
+                + String.join(", ", declaringTypeNames) + ")");
+        return false;
+    }
+
+    /**
+     * Validates whether the found field is compatible with this property type.
+     * Base implementation accepts any field. Subclasses (e.g. EditNodePropertyArr)
+     * can override this to enforce type-specific constraints (e.g. array type).
+     *
+     * @param foundField the field descriptor found in the parent type
+     * @param fieldName the field name being resolved
+     * @param parentType the parent type descriptor
+     * @return true if the field is valid for this property type
+     */
+    protected boolean validateFieldType(JsonFieldDescriptor foundField, String fieldName, JsonTypeDescriptor parentType) {
+        return true;
+    }
+
+    /**
+     * Collects the names of all types in the model that declare a field with the
+     * given name. Used to enrich error messages with context about where a field
+     * is actually defined.
+     *
+     * @param descriptor the JsonModelDescriptor to search
+     * @param fieldName the field name to look up
+     * @return list of type names declaring the field (never null, may be empty)
+     */
+    protected List<String> collectDeclaringTypeNames(JsonModelDescriptor descriptor, String fieldName) {
+        List<String> names = new ArrayList<>();
+        if (descriptor == null || fieldName == null) {
+            return names;
+        }
+        for (JsonTypeDescriptor type : descriptor.getTypes()) {
+            if (type != null && type.getField(fieldName) != null) {
+                names.add(type.getTypeName());
+            }
+        }
+        return names;
     }
 
     // ========== Factory methods ==========

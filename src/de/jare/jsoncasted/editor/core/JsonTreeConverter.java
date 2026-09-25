@@ -8,15 +8,30 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.debug.JsonDebugLevel;
 import de.jare.jsoncasted.io.JsonParseException;
+import de.jare.jsoncasted.io.JsonParser;
+import de.jare.jsoncasted.io.convertservice.WoodElementResolver;
+import de.jare.jsoncasted.io.convertservice.WoodResolution;
 import de.jare.jsoncasted.io.parserservice.JsonParserService;
+import de.jare.jsoncasted.item.builder.JsonBuilder;
 import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_CLASS;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_LINK;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_MODEL;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_OBJECT_ID;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
+import de.jare.jsoncasted.model.JsonBuildException;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import de.jare.jsoncasted.model.descriptor.def.JsonModelDescriptorDefinition;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utility class for converting between JSON data structures and EditTree
@@ -50,7 +65,11 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse file: " + file.getAbsolutePath());
         }
-        return convertRessourceToEditTree(resource, rootName);
+        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+
+        String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
+        File descriptionFile = WoodElementResolver.findDescriptionFile(descriptionFilePath, file);
+        return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
     }
 
     /**
@@ -67,7 +86,65 @@ public final class JsonTreeConverter {
         if (resource == null) {
             throw new IOException("Failed to parse JSON string");
         }
-        return convertRessourceToEditTree(resource, rootName);
+        final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+
+        String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
+        File descriptionFile = new File(descriptionFilePath);
+        return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
+    }
+
+    /**
+     *
+     * @param descriptionFilePath
+     * @param descriptionFile
+     * @param retEditTree
+     * @return
+     * @throws JsonParseException
+     */
+    public static EditTree loadDescrAndConvertRessourceToEditTree(EditTree retEditTree, String descriptionFilePath, File descriptionFile) throws JsonParseException {
+        JsonModelDescriptor descriptor = null;
+        if (descriptionFile != null) {
+            try {
+                JsonModelDescriptorDefinition definition = JsonModelDescriptorDefinition.getInstance();
+                WoodResolution resolution = JsonParser.parse(descriptionFile, definition, definition.getRootClass());
+                descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
+            } catch (JsonParseException | JsonBuildException | IOException | NullPointerException | ClassCastException ex) {
+                final String failedMsg = "Load JsonModelDescriptor failed. ";
+                Logger.getGlobal().log(Level.SEVERE, failedMsg, ex);
+                final EditNodeAbstract root = retEditTree.getRoot();
+                if (root != null) {
+                    root.setEditMessage(failedMsg + ex.getMessage());
+                    root.setEditStatus(EditStatus.ERROR);
+                }
+            }
+        }
+        retEditTree.setJsonModelDescriptor(descriptor);
+        retEditTree.setDescriptionFilePath(descriptionFilePath);
+
+        // Wenn der Root-Knoten noch keinen castName hat (kein _class im JSON),
+        // versuchen wir hier, den Typ ueber den Deskriptor aufzuloesen.
+        // Der Root-Name ist der Dateiname ohne Extension.
+        if (descriptor != null) {
+            EditNodeAbstract root = retEditTree.getRoot();
+            if (root instanceof EditNodeObject rootObj
+                    && (rootObj.getCastName() == null || rootObj.getCastName().isEmpty())) {
+                String rootCast = descriptor.getRootNodeCast();
+                if (rootCast != null && !rootCast.isEmpty()) {
+                    JsonTypeDescriptor rootType = descriptor.getType(rootCast);
+                    if (rootType == null) {
+                        rootType = descriptor.getTypePerceptive(rootCast);
+                    }
+                    if (rootType != null) {
+                        // Wire the root type so the parser's root fallback can
+                        // assign it when the root carries no cast name.
+                        retEditTree.setRootType(rootType);
+                        rootObj.setCastName(rootType.getTypeName());
+                    }
+                }
+            }
+        }
+
+        return retEditTree;
     }
 
     /**
@@ -107,6 +184,15 @@ public final class JsonTreeConverter {
      * Converts a JSON node to an EditNode structure and adds it as children to
      * the root node. Handles object values by creating EditProperty nodes for
      * each entry.
+     * <p>
+     * Metadata keys defined in {@link JsonTerms} (e.g. {@code _class},
+     * {@code _woodObjectId}, {@code _woodLink}, {@code _woodModel},
+     * {@code _woodProviders}) are filtered out and not added as child nodes. If
+     * a {@code _class} entry is present, its value is stored as the
+     * {@link EditNodeObject#setCastName(String) castName} on the root node so
+     * the parser can resolve the type via O(1) cache lookup on the first parse
+     * pass.
+     * </p>
      *
      * @param rootNode the root EditNodeObject to which child nodes will be
      * added
@@ -119,12 +205,42 @@ public final class JsonTreeConverter {
         Map<String, JsonNode> objectValues = jsonNode.asObjectValues();
         if (objectValues != null) {
             for (Map.Entry<String, JsonNode> entry : objectValues.entrySet()) {
-                if (JsonTerms.TERM_WOOD_PROVIDERS.equals(entry.getKey())) {
+                String key = entry.getKey();
+                // Filter metadata keys — these are structural and should not
+                // appear as editable child nodes in the tree.
+                if (isMetadataKey(key)) {
+                    // If the key is _class, store the value as castName on
+                    // the parent EditNodeObject so the parser can use it as
+                    // a cache for O(1) type resolution on the first parse.
+                    if (TERM_CLASS.equals(key)) {
+                        JsonNode classNode = entry.getValue();
+                        if (classNode != null) {
+                            String castName = classNode.asText();
+                            if (castName != null && !castName.isEmpty()) {
+                                rootNode.setCastName(castName);
+                            }
+                        }
+                    }
                     continue;
                 }
                 buildEditProperty(rootNode, entry, weightMonitor);
             }
         }
+    }
+
+    /**
+     * Checks whether a JSON property name is a metadata key that should be
+     * filtered out during tree construction, not added as an editable child.
+     *
+     * @param key the property name to check
+     * @return true if the key is a reserved metadata term
+     */
+    private static boolean isMetadataKey(String key) {
+        return TERM_WOOD_PROVIDERS.equals(key)
+                || TERM_CLASS.equals(key)
+                || TERM_WOOD_OBJECT_ID.equals(key)
+                || TERM_WOOD_LINK.equals(key)
+                || TERM_WOOD_MODEL.equals(key);
     }
 
     /**
@@ -178,7 +294,6 @@ public final class JsonTreeConverter {
      */
     private static void buildEditObject(EditNodeProperty parent, JsonNode jsonNode,
             EditTimes weightMonitor) throws JsonParseException {
-        System.out.println("1 +++++++++++++++   " + jsonNode);
         JsonNodeType type = jsonNode.getType();
 
         if (type == JsonNodeType.OBJECT) {

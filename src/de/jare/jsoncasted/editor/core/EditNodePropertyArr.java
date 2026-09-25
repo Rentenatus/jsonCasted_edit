@@ -8,6 +8,8 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,6 +29,24 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
     public EditNodePropertyArr() {
         super("array");
         setType(JsonNodeType.ARRAY);
+    }
+
+    @Override
+    public boolean tryAssignType(JsonModelDescriptor descriptor) {
+        return super.tryAssignType(descriptor);
+    }
+
+    /**
+     * Array properties require the field to support array or list collection type.
+     */
+    @Override
+    protected boolean validateFieldType(JsonFieldDescriptor foundField, String fieldName, JsonTypeDescriptor parentType) {
+        if (foundField.isAsArray() || foundField.isAsListOrArray()) {
+            return true;
+        }
+        setEditStatus(EditStatus.ERROR);
+        setEditMessage("Field '" + fieldName + "' in type '" + parentType.getTypeName() + "' is not an array type");
+        return false;
     }
 
     /**

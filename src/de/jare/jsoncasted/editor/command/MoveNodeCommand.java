@@ -386,6 +386,13 @@ public class MoveNodeCommand extends AbstractEditCommand {
         MoveBubble[] successfullyRemoved = removeAll(tree, oldEntries, newEntries);
         EditNodeAbstract[] moved = addAll(tree, newEntries, successfullyRemoved);
         EditNodeAbstract[] failed = failed(tree, oldEntries, successfullyRemoved);
+        
+        // Trigger Typzuordnung für alle verschobenen Nodes
+        if (tree.getJsonModelDescriptor() != null) {
+            for (EditNodeAbstract node : moved) {
+                tree.assignTypesForNode(node);
+            }
+        }
 
         return new CommandResult(
                 this,
@@ -416,6 +423,13 @@ public class MoveNodeCommand extends AbstractEditCommand {
         MoveBubble[] successfullyRemoved = removeAll(tree, newEntries, oldEntries);
         EditNodeAbstract[] moved = addAll(tree, oldEntries, successfullyRemoved);
         EditNodeAbstract[] failed = failed(tree, newEntries, successfullyRemoved);
+        
+        // Trigger Typzuordnung für alle verschobenen Nodes
+        if (tree.getJsonModelDescriptor() != null) {
+            for (EditNodeAbstract node : moved) {
+                tree.assignTypesForNode(node);
+            }
+        }
 
         return new CommandResult(
                 this,

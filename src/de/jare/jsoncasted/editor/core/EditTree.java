@@ -7,6 +7,10 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Represents the editable tree structure for JSON data. Maintains a hierarchy
@@ -20,7 +24,16 @@ public class EditTree {
     private final EditTimes weightMonitor;
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
+    private String descriptionFilePath;
     private JsonModelDescriptor jsonModelDescriptor;
+    private JsonTypeDescriptor rootType;
+
+    // On-the-Fly Parsing Infrastruktur
+    private TypeParserService parserService;
+    private TypeParserListener parserListener;
+    private final ConcurrentLinkedQueue<EditNodeAbstract> parseQueue = new ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.Semaphore parseQueueSignal = new java.util.concurrent.Semaphore(0);
+    private final Set<EditNodeAbstract> pendingNodes = ConcurrentHashMap.newKeySet();
 
     /**
      * Creates a new EditTree with a root node containing the specified text.
@@ -46,6 +59,55 @@ public class EditTree {
         this.root = root;
         this.weightMonitor = weightMonitor;
         rangeRelabeling(root);
+
+        // Setze die Tree-Referenz für den Root Node und alle Nachfahren.
+        // Children werden beim addChildPhase1 normalerweise vom Parent
+        // vererbt, aber JsonTreeConverter baut den Baum bevor das EditTree
+        // existiert, sodass die Tree-Referenz nie propagiert wurde.
+        root.setEditTree(this);
+        propagateEditTree(root);
+
+        // Initialisiere den ParseState für alle Knoten auf NONE
+        initializeParseStates(root);
+    }
+
+    /**
+     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des übergebenen
+     * Knotens. Wird im Konstruktor aufgerufen, um sicherzustellen, dass jeder
+     * Knoten im Baum seine EditTree-Referenz kennt.
+     *
+     * @param node der Startknoten
+     */
+    private void propagateEditTree(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            EditNode child = node.getChildAt(i);
+            if (child instanceof EditNodeAbstract) {
+                ((EditNodeAbstract) child).setEditTree(this);
+                propagateEditTree((EditNodeAbstract) child);
+            }
+        }
+    }
+
+    /**
+     * Initialisiert den ParseState für alle Knoten im Baum auf NONE. Wird beim
+     * Erstellen des Baums aufgerufen.
+     *
+     * @param node der Startknoten (normalerweise root)
+     */
+    private void initializeParseStates(EditNodeAbstract node) {
+        if (node != null) {
+            node.setParseState(ParseState.NONE);
+            node.setLastParsedHash(0);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    initializeParseStates((EditNodeAbstract) child);
+                }
+            }
+        }
     }
 
     /**
@@ -344,10 +406,11 @@ public class EditTree {
         EditNodeAbstract newNode = template.deepCopy(regenerateEditId);
 
         if (index >= 0 && index <= parentNode.getChildCount()) {
-            parentNode.addChild(newNode, index, weightMonitor);
+            addChild(parentNode, newNode, index);
         } else {
-            parentNode.addChild(newNode, weightMonitor);
+            addChild(parentNode, newNode);
         }
+
         return newNode;
     }
 
@@ -363,7 +426,17 @@ public class EditTree {
      */
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, boolean asArray) {
         checkParentProps(parentNode);
-        return parentNode.addNewChild(nodeText, asArray, weightMonitor);
+        EditNodeAbstract newNode = parentNode.addNewChild(nodeText, asArray, weightMonitor);
+
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
+
+        return newNode;
     }
 
     /**
@@ -381,7 +454,17 @@ public class EditTree {
      */
     public EditNodeAbstract addNewChild(EditNodeAbstract parentNode, String nodeText, int index, boolean asArray) {
         checkParentProps(parentNode);
-        return parentNode.addNewChild(nodeText, index, asArray, weightMonitor);
+        EditNodeAbstract newNode = parentNode.addNewChild(nodeText, index, asArray, weightMonitor);
+
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
+
+        return newNode;
     }
 
     /**
@@ -468,6 +551,14 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, weightMonitor);
+
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
     }
 
     /**
@@ -481,6 +572,14 @@ public class EditTree {
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode, int index) {
         checkNewAndParentProps(newNode, parentNode);
         parentNode.addChild(newNode, index, weightMonitor);
+
+        // Automatische Typzuordnung für den neuen Node
+        if (jsonModelDescriptor != null) {
+            newNode.tryAssignType(jsonModelDescriptor);
+        }
+
+        // Notify parser listener about child addition
+        notifyChildAdded(parentNode, newNode);
     }
 
     /**
@@ -495,7 +594,14 @@ public class EditTree {
      */
     public boolean removeChild(EditNodeAbstract parentNode, EditNodeAbstract child) {
         checkParentProps(parentNode);
-        return parentNode.removeChild(child);
+        boolean removed = parentNode.removeChild(child);
+
+        // Notify parser listener about child removal
+        if (removed) {
+            notifyChildRemoved(parentNode, child);
+        }
+
+        return removed;
     }
 
     /**
@@ -522,7 +628,7 @@ public class EditTree {
             return false;
         }
         checkMembership(parentNode);
-        return parentNode.removeChild(child);
+        return removeChild(parentNode, child);
     }
 
     /**
@@ -685,12 +791,339 @@ public class EditTree {
     }
 
     /**
-     * Sets the JsonModelDescriptor for this tree.
+     * Returns the root type descriptor for this tree, if set. Used by the
+     * parser to assign a type to the root node when its name does not match any
+     * type in the model.
+     *
+     * @return the root type descriptor, or {@code null} if not set.
+     */
+    public JsonTypeDescriptor getRootType() {
+        return rootType;
+    }
+
+    /**
+     * Sets the root type descriptor for this tree. This allows the parser to
+     * assign a type to the root node without hardcoding a specific type name.
+     * The caller should obtain the root type from the model definition (e.g.,
+     * JsonItemDefinition.getRootClass()).
+     *
+     * @param rootType the root type descriptor to set, or {@code null} to
+     * clear.
+     */
+    public void setRootType(JsonTypeDescriptor rootType) {
+        this.rootType = rootType;
+    }
+
+    void setDescriptionFilePath(String descriptionFilePath) {
+        this.descriptionFilePath = descriptionFilePath;
+    }
+
+    public String getDescriptionFilePath() {
+        return descriptionFilePath;
+    }
+
+    /**
+     * Sets the JsonModelDescriptor for this tree. Automatically starts the
+     * parser service if not already running.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
+
+        // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
+        startParserService();
+
+        // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
+        // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
+        // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
+        if (parserService != null && parserService.isRunning()) {
+            // Markiere alle Knoten als EDITED, damit sie geparst werden
+            markAllNodesAsEdited(getRoot());
+            // Alle Knoten zur Queue hinzufügen, nicht nur Root
+            queueAllNodesForParsing(getRoot());
+        }
+    }
+
+    /**
+     * Startet den TypeParserService für diesen Baum, falls noch nicht
+     * gestartet. Erstellt einen neuen Service, wenn keiner existiert.
+     */
+    public void startParserService() {
+        if (parserService == null) {
+            parserService = new TypeParserService(this);
+        }
+        if (!parserService.isRunning()) {
+            parserService.start();
+        }
+    }
+
+    /**
+     * Stoppt den TypeParserService für diesen Baum.
+     */
+    public void stopParserService() {
+        if (parserService != null && parserService.isRunning()) {
+            parserService.stop();
+        }
+    }
+
+    /**
+     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing
+     * zu erzwingen.
+     *
+     * @param node der Startknoten
+     */
+    private void markAllNodesAsEdited(EditNodeAbstract node) {
+        if (node != null) {
+            node.setParseState(ParseState.EDITED);
+            node.setLastParsedHash(0);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    markAllNodesAsEdited((EditNodeAbstract) child);
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds all nodes in the subtree rooted at the given node to the parse
+     * queue. Unlike only queuing the root, this ensures every node is
+     * processed, not just the root whose children would otherwise stay in
+     * EDITED state.
+     *
+     * @param node the starting node (normally root)
+     */
+    private void queueAllNodesForParsing(EditNodeAbstract node) {
+        if (node != null) {
+            addToParseQueue(node);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    queueAllNodesForParsing((EditNodeAbstract) child);
+                }
+            }
+        }
+    }
+
+    // ========== On-the-Fly Parsing Methods ==========
+    /**
+     * Returns the TypeParserService for this tree.
+     *
+     * @return the parser service, or {@code null} if not initialized
+     */
+    public TypeParserService getParserService() {
+        return parserService;
+    }
+
+    /**
+     * Sets the TypeParserService for this tree. The service is responsible for
+     * on-the-fly type parsing of nodes. Automatically starts the service if
+     * it's not null and not already running.
+     *
+     * @param parserService the parser service to set
+     */
+    public void setParserService(TypeParserService parserService) {
+        // Stoppen des aktuellen Services, falls vorhanden
+        if (this.parserService != null && this.parserService.isRunning()) {
+            this.parserService.stop();
+        }
+        this.parserService = parserService;
+        // Automatisch starten, wenn ein neuer Service gesetzt wird
+        if (parserService != null && jsonModelDescriptor != null) {
+            parserService.start();
+        }
+    }
+
+    /**
+     * Returns the TypeParserListener for this tree.
+     *
+     * @return the parser listener, or {@code null} if not set
+     */
+    public TypeParserListener getParserListener() {
+        return parserListener;
+    }
+
+    /**
+     * Sets the TypeParserListener for this tree. The listener receives
+     * notifications about node changes that require re-parsing.
+     *
+     * @param parserListener the parser listener to set
+     */
+    public void setParserListener(TypeParserListener parserListener) {
+        this.parserListener = parserListener;
+    }
+
+    /**
+     * Notifies the parser listener that a node's name has changed.
+     *
+     * @param node the node whose name was changed
+     * @param oldName the previous name (may be null)
+     * @param newName the new name
+     */
+    public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
+        if (parserListener != null) {
+            parserListener.onNodeNameChanged(node, oldName, newName);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a node's value has changed.
+     *
+     * @param node the node whose value was changed
+     * @param oldValue the previous value (may be null)
+     * @param newValue the new value (may be null)
+     */
+    public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
+        if (parserListener != null) {
+            parserListener.onNodeValueChanged(node, oldValue, newValue);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a child has been added.
+     *
+     * @param parent the parent node to which the child was added
+     * @param child the child node that was added
+     */
+    public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserListener != null) {
+            parserListener.onChildAdded(parent, child);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a child has been removed.
+     *
+     * @param parent the parent node from which the child was removed
+     * @param child the child node that was removed
+     */
+    public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserListener != null) {
+            parserListener.onChildRemoved(parent, child);
+        }
+    }
+
+    /**
+     * Notifies the parser listener that a node's type descriptor has changed.
+     *
+     * @param node the node whose type descriptor was changed
+     */
+    public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
+        if (parserListener != null) {
+            parserListener.onTypeDescriptorChanged(node);
+        }
+    }
+
+    /**
+     * Returns the parse queue for this tree. Contains nodes that are waiting to
+     * be parsed.
+     *
+     * @return the parse queue (thread-safe)
+     */
+    public ConcurrentLinkedQueue<EditNodeAbstract> getParseQueue() {
+        return parseQueue;
+    }
+
+    /**
+     * Returns the set of pending nodes for deduplication.
+     *
+     * @return the pending nodes set (thread-safe)
+     */
+    public Set<EditNodeAbstract> getPendingNodes() {
+        return pendingNodes;
+    }
+
+    /**
+     * Adds a node to the parse queue, ensuring it is always queued even if it
+     * was already pending. This fixes a race condition where the UI-thread
+     * re-queues a node that the parser is currently processing: the node is
+     * first removed from the pending set and then re-added, so the parser's
+     * subsequent removeFromPending call does not lose the re-queue.
+     *
+     * @param node the node to add to the parse queue
+     */
+    public void addToParseQueue(EditNodeAbstract node) {
+        if (node == null) {
+            return;
+        }
+        // Remove first, then re-add to guarantee the node is queued
+        // even if it was already pending.
+        pendingNodes.remove(node);
+        pendingNodes.add(node);
+        parseQueue.add(node);
+        // Signal the queue processor that a node is available
+        parseQueueSignal.release();
+        // Update parse state to PENDING
+        node.setParseState(ParseState.PENDING);
+    }
+
+    /**
+     * Removes a node from the pending set. Does NOT remove from the parse
+     * queue: if the node was re-queued by addToParseQueue while the parser was
+     * processing it, the re-queued entry must survive so the parser picks it up
+     * again.
+     *
+     * @param node the node to remove
+     */
+    public void removeFromPending(EditNodeAbstract node) {
+        if (node != null) {
+            pendingNodes.remove(node);
+        }
+    }
+
+    /**
+     * Waits for the signal that a node was added to the parse queue, at most 500 milliseconds. Lets the queue
+     * processor idle without busy waiting and keeps it reactive for shutdown.
+     *
+     * @throws InterruptedException if the wait is interrupted
+     */
+    public void awaitParseSignal() throws InterruptedException {
+        parseQueueSignal.tryAcquire(500, java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Weist Typen aus dem Modell allen Nodes im Baum zu. Iteriert durch den
+     * gesamten Baum (DFS) und ruft tryAssignType() auf jedem Node auf.
+     */
+    public void assignTypesFromModel() {
+        if (jsonModelDescriptor != null) {
+            assignTypesRecursive(getRoot(), jsonModelDescriptor);
+        }
+    }
+
+    /**
+     * Rekursive Hilfsmethode zur Typzuordnung für den gesamten Baum.
+     *
+     * @param node Der aktuelle Node
+     * @param descriptor Der JsonModelDescriptor
+     */
+    private void assignTypesRecursive(EditNodeAbstract node, JsonModelDescriptor descriptor) {
+        node.tryAssignType(descriptor);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            EditNode child = node.getChildAt(i);
+            if (child instanceof EditNodeAbstract) {
+                assignTypesRecursive((EditNodeAbstract) child, descriptor);
+            }
+        }
+    }
+
+    /**
+     * Weist Typen für einen einzelnen Node und seine Kinder zu.
+     *
+     * @param node Der Node, für den die Typzuordnung durchgeführt werden soll
+     */
+    public void assignTypesForNode(EditNodeAbstract node) {
+        if (jsonModelDescriptor != null && node != null) {
+            node.tryAssignType(jsonModelDescriptor);
+            // Auch alle Kinder neu zuordnen, da sich möglicherweise deren Kontext geändert hat
+            for (int i = 0; i < node.getChildCount(); i++) {
+                EditNode child = node.getChildAt(i);
+                if (child instanceof EditNodeAbstract) {
+                    assignTypesRecursive((EditNodeAbstract) child, jsonModelDescriptor);
+                }
+            }
+        }
     }
 
     /**
@@ -703,6 +1136,44 @@ public class EditTree {
     public void rangeRelabeling(EditNodeAbstract node) {
         checkMembership(node);
         node.rangeRelabeling(weightMonitor);
+    }
+
+    // ========== On-the-Fly Parser Lifecycle Methods ==========
+    /**
+     * Triggers a full re-parse of the entire tree. Marks all nodes as EDITED
+     * and adds all nodes to the parse queue. This is useful when you want to
+     * force a complete re-evaluation of types.
+     */
+    public void triggerFullReparse() {
+        if (parserService != null && parserService.isRunning()) {
+            markAllNodesAsEdited(getRoot());
+            queueAllNodesForParsing(getRoot());
+        }
+    }
+
+    /**
+     * Closes this EditTree and releases resources. Stops the parser service and
+     * cleans up. Should be called when the tree is no longer needed.
+     */
+    public void close() {
+        stopParserService();
+        // Clear references to allow garbage collection
+        if (parserService != null) {
+            parserService.stop();
+            parserService = null;
+        }
+        parserListener = null;
+        parseQueue.clear();
+        pendingNodes.clear();
+    }
+
+    /**
+     * Returns whether the parser service is currently running.
+     *
+     * @return true if the parser service is running, false otherwise
+     */
+    public boolean isParserRunning() {
+        return parserService != null && parserService.isRunning();
     }
 
 }

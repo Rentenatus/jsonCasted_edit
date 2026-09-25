@@ -7,6 +7,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
+import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,7 +28,22 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private String objektValue;
     private String objektInfo;
     private String objektId;
-    private JsonTypeDescriptor jsonType;
+    private volatile JsonTypeDescriptor jsonType;
+
+    /**
+     * Cast name extracted from the {@code TERM_CLASS} (_class) entry during
+     * JSON-to-EditNode conversion. Serves as the primary lookup key for type
+     * resolution in {@link #tryAssignType(JsonModelDescriptor)} so that the
+     * correct substructure can be parsed even when the node name differs from
+     * the type name (e.g. node "config1" vs. type "ConfigRoot").
+     * <p>
+     * May also be set by the parser's parent-type inference or root-type
+     * handling to cache an inferred type name for subsequent re-parses. Remains
+     * {@code null} when no {@code TERM_CLASS} was present and no inference has
+     * assigned a type.
+     * </p>
+     */
+    private volatile String castName;
 
     /**
      * Creates a new EditNodeObject with the specified value.
@@ -79,7 +95,15 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     @Override
     public void setName(String name) {
+        String oldName = this.objektValue;
         this.objektValue = name;
+
+        // Notify parser listener about name change — this triggers
+        // asynchronous re-parsing via the parse queue.
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyNodeNameChanged(this, oldName, name);
+        }
     }
 
     /**
@@ -127,6 +151,74 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     public void setObjektId(String objektId) {
         this.objektId = objektId;
+    }
+
+    /**
+     * Returns the cast name for this node. This is the {@code TERM_CLASS}
+     * content extracted during JSON conversion, or a type name set by the
+     * parser's inference logic. Used as the primary lookup key in
+     * {@link #tryAssignType(JsonModelDescriptor)}.
+     *
+     * @return the cast name, or {@code null} if none was set
+     */
+    public String getCastName() {
+        return castName;
+    }
+
+    /**
+     * Sets the cast name. When set, {@link #tryAssignType} uses
+     * {@code descriptor.getType(castName)} as the primary lookup before falling
+     * back to the node name.
+     *
+     * @param castName the cast name to set, or {@code null} to clear
+     */
+    public void setCastName(String castName) {
+        final String oldCast = this.castName;
+        this.castName = castName;
+
+        // Notify parser listener about a cast change - the cast name is the
+        // primary parsing input for object nodes, so a changed cast must
+        // trigger asynchronous re-parsing via the parse queue.
+        EditTree tree = getEditTree();
+        if (tree != null && !java.util.Objects.equals(oldCast, castName)) {
+            tree.notifyTypeDescriptorChanged(this);
+        }
+    }
+
+    @Override
+    public boolean tryAssignType(JsonModelDescriptor descriptor) {
+        if (descriptor == null) {
+            setEditStatus(EditStatus.STATELESS);
+            setEditMessage(null);
+            return false;
+        }
+
+        // Primary search key: castName (from TERM_CLASS). 
+        // Fallback to the node name if no castName is available.
+        String cast = getCastName();
+        String lookupKey = (cast != null && !cast.isEmpty()) ? cast : getName();
+        if (lookupKey == null || lookupKey.isEmpty()) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Object node has no cast name or name for type assignment");
+            return false;
+        }
+
+        JsonTypeDescriptor foundType = descriptor.getType(lookupKey);
+
+        if (foundType == null) { // Fallback: try a more perceptive search (e.g., case-insensitive, partial match)
+            foundType = descriptor.getTypePerceptive(lookupKey);
+        }
+
+        if (foundType != null) {
+            setJsonType(foundType);
+            setCastName(foundType.getTypeName());
+            markOkay(descriptor);
+            return true;
+        } else {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Type '" + lookupKey + "' not found in model");
+            return false;
+        }
     }
 
     /**
@@ -187,6 +279,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             copy.addChildPhase1(deepCopy, copy.getChildCount());
             copy.addChildPhase2Fast(deepCopy);
         }
+        copy.setCastName(castName);
         return copy;
     }
 
@@ -221,6 +314,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("infotype", new JackAttribut("infotype", getObjektInfo()));
         attributes.put("objektId", new JackAttribut("objektId", getObjektId()));
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
+        attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
         return putEditAttributes(attributes);
     }
 
@@ -252,6 +346,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut typeAttr = props.get("jsonType");
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
+        }
+        JackAttribut castNameAttr = props.get("|cast name");
+        if (castNameAttr != null) {
+            setCastName((String) castNameAttr.getValue());
         }
     }
 
