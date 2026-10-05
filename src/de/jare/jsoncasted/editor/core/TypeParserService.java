@@ -280,11 +280,12 @@ public class TypeParserService implements TypeParserListener {
     /**
      * Safely parses a single node with error handling. This method wraps the
      * actual parseNode call to prevent exceptions from propagating to the
-     * thread pool.
+     * caller. Used by the queue worker and by EditTree for synchronous
+     * parsing in HARD_PARSE mode.
      *
      * @param node the node to parse
      */
-    private void parseNodeSafely(EditNodeAbstract node) {
+    public void parseNodeSafely(EditNodeAbstract node) {
         try {
             parseNode(node);
         } catch (Exception e) {

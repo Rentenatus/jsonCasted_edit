@@ -27,6 +27,7 @@ public class EditTree {
     private EditLinkingSet linkingSet;
     private String descriptionFilePath;
     private String providerName = JsonTerms.THIS_SYNONYM;
+    private ParseMode parseMode = ParseMode.SOFT_PARSE;
     private JsonModelDescriptor jsonModelDescriptor;
     private JsonTypeDescriptor rootType;
 
@@ -845,25 +846,162 @@ public class EditTree {
     }
 
     /**
-     * Sets the JsonModelDescriptor for this tree. Automatically starts the
-     * parser service if not already running.
+     * Returns the current parse mode of this tree.
+     *
+     * @return the parse mode, never {@code null}
+     */
+    public ParseMode getParseMode() {
+        return parseMode;
+    }
+
+    /**
+     * Sets the parse mode of this tree. WITHOUT_SEMANTICS stops the
+     * background parser and discards the parse queue. SOFT_PARSE starts
+     * the background parser and re-parses the whole tree. HARD_PARSE is
+     * only accepted when every node has the edit status OKAY; it drains
+     * the remaining parse queue synchronously and stops the background
+     * threads, because every following change is parsed synchronously
+     * by {@link #parseNow(EditNodeAbstract)}.
+     *
+     * @param newMode the parse mode to set, {@code null} is ignored
+     * @return true if the mode was applied, false if HARD_PARSE was
+     * rejected because the tree still contains parse problems
+     */
+    public boolean setParseMode(ParseMode newMode) {
+        if (newMode == null || newMode == parseMode) {
+            return true;
+        }
+        if (newMode == ParseMode.HARD_PARSE && findFirstNotOkay(getRoot()) != null) {
+            return false;
+        }
+        this.parseMode = newMode;
+        switch (newMode) {
+            case WITHOUT_SEMANTICS -> {
+                stopParserService();
+                parseQueue.clear();
+                pendingNodes.clear();
+            }
+            case SOFT_PARSE -> {
+                if (jsonModelDescriptor != null) {
+                    startParserService();
+                    triggerFullReparse();
+                }
+            }
+            case HARD_PARSE -> {
+                ensureParserService();
+                drainParseQueue();
+                stopParserService();
+            }
+            default -> {
+                // No further action
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Parses the given node and all nodes queued by the parse cascade
+     * synchronously on the calling thread. Used in HARD_PARSE mode so
+     * that every change is verified before the mutating call returns.
+     *
+     * @param node the node to parse, may be {@code null}
+     */
+    private void parseNow(EditNodeAbstract node) {
+        if (parseMode != ParseMode.HARD_PARSE || node == null) {
+            return;
+        }
+        ensureParserService();
+        parserService.parseNodeSafely(node);
+        drainParseQueue();
+    }
+
+    /**
+     * Processes the parse queue synchronously until it is empty.
+     * Cascades (nodes re-queued during parsing) are handled by the loop;
+     * the hash-based skip in the parser bounds the number of passes.
+     */
+    private void drainParseQueue() {
+        EditNodeAbstract queued;
+        while ((queued = parseQueue.poll()) != null) {
+            parserService.parseNodeSafely(queued);
+        }
+        pendingNodes.clear();
+    }
+
+    /**
+     * Creates the parser service instance without starting its
+     * background threads, so parseNodeSafely can be used for
+     * synchronous parsing.
+     */
+    private void ensureParserService() {
+        if (parserService == null) {
+            parserService = new TypeParserService(this);
+        }
+    }
+
+    /**
+     * Returns the first node whose edit status is not OKAY.
+     *
+     * @param node the node to check together with its children
+     * @return the first offending node, or {@code null} if none
+     */
+    private EditNodeAbstract findFirstNotOkay(EditNodeAbstract node) {
+        if (node == null) {
+            return null;
+        }
+        if (node.getEditStatus() != EditStatus.OKAY) {
+            return node;
+        }
+        for (EditNode child : node.getChildren()) {
+            if (child instanceof EditNodeAbstract absChild) {
+                EditNodeAbstract offender = findFirstNotOkay(absChild);
+                if (offender != null) {
+                    return offender;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sets the JsonModelDescriptor for this tree. In SOFT_PARSE mode the
+     * background parser is started and the whole tree is queued for
+     * parsing; in HARD_PARSE mode the tree is parsed synchronously; in
+     * WITHOUT_SEMANTICS mode nothing happens.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
 
-        // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
-        startParserService();
+        switch (parseMode) {
+            case SOFT_PARSE -> {
+                // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
+                startParserService();
 
-        // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
-        // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
-        // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
-        if (parserService != null && parserService.isRunning()) {
-            // Markiere alle Knoten als EDITED, damit sie geparst werden
-            markAllNodesAsEdited(getRoot());
-            // Alle Knoten zur Queue hinzufügen, nicht nur Root
-            queueAllNodesForParsing(getRoot());
+                // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
+                // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
+                // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
+                if (parserService != null && parserService.isRunning()) {
+                    // Markiere alle Knoten als EDITED, damit sie geparst werden
+                    markAllNodesAsEdited(getRoot());
+                    // Alle Knoten zur Queue hinzufügen, nicht nur Root
+                    queueAllNodesForParsing(getRoot());
+                }
+            }
+            case HARD_PARSE -> {
+                // Synchron: alle Knoten sofort verarbeiten
+                ensureParserService();
+                markAllNodesAsEdited(getRoot());
+                queueAllNodesForParsing(getRoot());
+                drainParseQueue();
+            }
+            case WITHOUT_SEMANTICS -> {
+                // Parser schläft; nichts zu tun
+            }
+            default -> {
+                // No further action
+            }
         }
     }
 
@@ -984,6 +1122,13 @@ public class EditTree {
      * @param newName the new name
      */
     public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onNodeNameChanged(node, oldName, newName);
         }
@@ -997,6 +1142,13 @@ public class EditTree {
      * @param newValue the new value (may be null)
      */
     public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onNodeValueChanged(node, oldValue, newValue);
         }
@@ -1009,6 +1161,14 @@ public class EditTree {
      * @param child the child node that was added
      */
     public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(parent);
+            parseNow(child);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onChildAdded(parent, child);
         }
@@ -1021,6 +1181,13 @@ public class EditTree {
      * @param child the child node that was removed
      */
     public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(parent);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onChildRemoved(parent, child);
         }
@@ -1032,6 +1199,13 @@ public class EditTree {
      * @param node the node whose type descriptor was changed
      */
     public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onTypeDescriptorChanged(node);
         }
