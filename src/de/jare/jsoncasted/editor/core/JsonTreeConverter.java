@@ -56,20 +56,34 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails
      */
     public static EditTree fromJsonFile(File file) throws IOException, JsonParseException {
-        String rootName = file.getName();
-        int dotIndex = rootName.lastIndexOf('.');
-        if (dotIndex > 0) {
-            rootName = rootName.substring(0, dotIndex);
-        }
         JsonResource resource = JsonParserService.parse(file, JsonDebugLevel.SIMPLE);
         if (resource == null) {
             throw new IOException("Failed to parse file: " + file.getAbsolutePath());
         }
+        final String rootName = resolveRootName(resource);
         final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
+        retEditTree.setProviderName(rootName);
 
         String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
         File descriptionFile = WoodElementResolver.findDescriptionFile(descriptionFilePath, file);
         return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
+    }
+
+    /**
+     * Derives the display name for the root node from the provider name
+     * of the given resource. The main resource carries no provider alias
+     * of its own and therefore defaults to {@code this}.
+     *
+     * @param resource the parsed JSON resource
+     * @return the provider name, or {@code this} when the resource has none
+     */
+    private static String resolveRootName(JsonResource resource) {
+        String providerName = resource.getProviderName();
+        if (providerName == null || providerName.isBlank()
+                || JsonTerms.SELF_SYNONYM.equals(providerName)) {
+            return JsonTerms.THIS_SYNONYM;
+        }
+        return providerName;
     }
 
     /**

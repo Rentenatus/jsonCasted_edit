@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.lang.JsonTerms;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.Set;
@@ -25,6 +26,7 @@ public class EditTree {
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
     private String descriptionFilePath;
+    private String providerName = JsonTerms.THIS_SYNONYM;
     private JsonModelDescriptor jsonModelDescriptor;
     private JsonTypeDescriptor rootType;
 
@@ -820,6 +822,26 @@ public class EditTree {
 
     public String getDescriptionFilePath() {
         return descriptionFilePath;
+    }
+
+    /**
+     * Returns the provider synonym this tree is loaded under. The main
+     * resource carries no provider alias of its own and defaults to
+     * {@code this}.
+     *
+     * @return the provider synonym
+     */
+    public String getProviderName() {
+        return providerName;
+    }
+
+    /**
+     * Sets the provider synonym this tree is displayed under.
+     *
+     * @param providerName the provider synonym to set
+     */
+    public void setProviderName(String providerName) {
+        this.providerName = providerName;
     }
 
     /**
