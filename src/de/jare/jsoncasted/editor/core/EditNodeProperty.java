@@ -222,6 +222,19 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             return false;
         }
 
+        // Map entry: the parent type is a map (mappingAllFields set). Map
+        // keys are dynamic and legitimate - there is no field to resolve.
+        // The value semantics come from the mapping and are handed to the
+        // children by the element type propagation.
+        if (parentType != null && parentType.getMappingAllFields() != null) {
+            markOkay(descriptor);
+            final EditTree tree = getEditTree();
+            if (tree != null) {
+                tree.propagateElementTypeToChildren(this);
+            }
+            return true;
+        }
+
         // 1. Schnelle Existenzpruefung ueber die gesamte Modell-Feldkarte.
         //    Jeder Eintrag fasst alle Felddefinitionen gleichen Namens zusammen,
         //    die Listengroesse ist also die Anzahl der Typen, die das Feld

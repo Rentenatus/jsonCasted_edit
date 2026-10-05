@@ -9,6 +9,7 @@ package de.jare.jsoncasted.editor.core;
 import de.jare.jsoncasted.lang.JsonTerms;
 import de.jare.jsoncasted.model.JsonCollectionType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonFieldTypeNote;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.Set;
@@ -1237,6 +1238,8 @@ public class EditTree {
      * ({@link EditNodeProperty#setJsonField}) and whenever a child is added
      * under a field-carrying property, so collection elements carry their
      * type immediately instead of waiting for the next parse generation.
+     * Map entries carry no field: there the value type comes from the
+     * mapping of the parent map type ({@code mappingAllFields}).
      * <p>
      * State-aware rules: children without a confirmed parse result and
      * without an explicit cast decision get the element type as an inherited
@@ -1257,15 +1260,29 @@ public class EditTree {
         if (parseMode == ParseMode.WITHOUT_SEMANTICS || property == null) {
             return;
         }
-        final JsonFieldDescriptor field = property.getJsonField();
-        if (field == null || jsonModelDescriptor == null) {
+        if (jsonModelDescriptor == null) {
             return;
         }
-        final JsonTypeDescriptor expected = jsonModelDescriptor.getType(field.getTypeName());
+        JsonTypeDescriptor expected = null;
+        boolean collection = false;
+        final JsonFieldDescriptor field = property.getJsonField();
+        if (field != null) {
+            expected = jsonModelDescriptor.getType(field.getTypeName());
+            collection = field.getCollectionType() != JsonCollectionType.NONE;
+        } else if (property.getParent() instanceof EditNodeObject mapObject
+                && mapObject.getJsonType() != null
+                && mapObject.getJsonType().getMappingAllFields() != null) {
+            // Map entry without a JsonField: the value semantics come from
+            // the mapping of the parent map type (value type plus optional
+            // collection type), so elements under map keys adopt the mapped
+            // value type.
+            final JsonFieldTypeNote mapping = mapObject.getJsonType().getMappingAllFields();
+            expected = jsonModelDescriptor.getType(mapping.getTypeName());
+            collection = mapping.getCollectionType() != JsonCollectionType.NONE;
+        }
         if (expected == null) {
             return;
         }
-        final boolean collection = field.getCollectionType() != JsonCollectionType.NONE;
         // Object children under a primitive single field are not the tree
         // converter's doing - no propagation there.
         if (!collection && expected.isPrimitive()) {
