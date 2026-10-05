@@ -7,6 +7,8 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonTerms;
+import de.jare.jsoncasted.model.JsonCollectionType;
+import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.Set;
@@ -1164,7 +1166,25 @@ public class EditTree {
         if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
             return;
         }
+        // A child under a property with a resolved field receives the
+        // declared element type immediately, so the parse pass triggered
+        // below confirms it instead of seeing an anonymous placeholder.
+        if (parent instanceof EditNodeProperty) {
+            propagateElementTypeToChildren((EditNodeProperty) parent);
+        }
         if (parseMode == ParseMode.HARD_PARSE) {
+            // TODO hard parse: the automatic tryAssignType in the tree-level
+            // add methods resolves the anonymous placeholder "Object" via
+            // the model's catch-all type and setCastName() then parses the
+            // node immediately (parseNow), so the child is DONE + OKAY with
+            // a name-derived cast BEFORE this propagation runs. The
+            // confirmed branch then only requeues the mismatching child
+            // instead of redirecting it, and the element ends up as an
+            // ERROR "does not match" instead of the field's element type.
+            // Fix ideas: run the propagation before the auto-typing, or let
+            // the auto-typing skip anonymous placeholder nodes under
+            // field-carrying properties. Parked for now - SOFT_PARSE is the
+            // supported mode for element typing.
             parseNow(parent);
             parseNow(child);
             return;
@@ -1208,6 +1228,91 @@ public class EditTree {
         }
         if (parserListener != null) {
             parserListener.onTypeDescriptorChanged(node);
+        }
+    }
+
+    /**
+     * Hands the element type declared by the given property's field
+     * descriptor to the property's object children. Runs at the field event
+     * ({@link EditNodeProperty#setJsonField}) and whenever a child is added
+     * under a field-carrying property, so collection elements carry their
+     * type immediately instead of waiting for the next parse generation.
+     * <p>
+     * State-aware rules: children without a confirmed parse result and
+     * without an explicit cast decision get the element type as an inherited
+     * pre-assignment and are queued for the confirming pass. Children
+     * confirmed as DONE + OKAY stay untouched while their type fits the
+     * expected element type ({@code contains}, including implementors, or
+     * {@code containsSuper} for subtypes); a confirmed child with a
+     * non-fitting type is queued - an inherited cast is redirected to the
+     * new element type, an explicit cast (user input, {@code _class}) keeps
+     * its decision and the parser reports the mismatch. Children with an
+     * explicit cast decision are never overwritten. In WITHOUT_SEMANTICS
+     * mode nothing happens - the parser sleeps.
+     * </p>
+     *
+     * @param property the property whose children receive the element type
+     */
+    void propagateElementTypeToChildren(EditNodeProperty property) {
+        if (parseMode == ParseMode.WITHOUT_SEMANTICS || property == null) {
+            return;
+        }
+        final JsonFieldDescriptor field = property.getJsonField();
+        if (field == null || jsonModelDescriptor == null) {
+            return;
+        }
+        final JsonTypeDescriptor expected = jsonModelDescriptor.getType(field.getTypeName());
+        if (expected == null) {
+            return;
+        }
+        final boolean collection = field.getCollectionType() != JsonCollectionType.NONE;
+        // Object children under a primitive single field are not the tree
+        // converter's doing - no propagation there.
+        if (!collection && expected.isPrimitive()) {
+            return;
+        }
+        for (int i = 0; i < property.getChildCount(); i++) {
+            if (!(property.getChildAt(i) instanceof EditNodeObject)) {
+                continue;
+            }
+            final EditNodeObject child = (EditNodeObject) property.getChildAt(i);
+            final JsonTypeDescriptor current = child.getJsonType();
+            if (child.getParseState() == ParseState.DONE
+                    && child.getEditStatus() == EditStatus.OKAY) {
+                // Confirmed decision: untouched when it still fits.
+                if (current != null && (expected.contains(current)
+                        || current.containsSuper(expected))) {
+                    continue;
+                }
+                if (child.isCastInherited()) {
+                    child.setInheritedCast(expected);
+                }
+                markForReparse(child);
+                continue;
+            }
+            if (child.hasExplicitCastDecision()) {
+                continue;
+            }
+            if (child.isCastInherited() && current == expected) {
+                continue; // already pre-assigned and queued
+            }
+            child.setInheritedCast(expected);
+            markForReparse(child);
+        }
+    }
+
+    /**
+     * Marks the given node as EDITED ("zu pruefen") and queues it for the
+     * next parse pass. In HARD_PARSE mode the queue is drained synchronously
+     * so the caller returns with the verified state.
+     *
+     * @param node the node to queue for re-parsing
+     */
+    private void markForReparse(EditNodeAbstract node) {
+        node.setParseState(ParseState.EDITED);
+        addToParseQueue(node);
+        if (parseMode == ParseMode.HARD_PARSE) {
+            drainParseQueue();
         }
     }
 

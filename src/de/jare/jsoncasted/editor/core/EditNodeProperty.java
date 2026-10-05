@@ -183,7 +183,17 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      * @param jsonField the JsonFieldDescriptor to set
      */
     public void setJsonField(JsonFieldDescriptor jsonField) {
+        final JsonFieldDescriptor oldField = this.jsonField;
         this.jsonField = jsonField;
+        // Field event: a newly resolved field hands the declared element
+        // type to the property's object children immediately (state-aware,
+        // see EditTree#propagateElementTypeToChildren).
+        if (jsonField != oldField) {
+            final EditTree tree = getEditTree();
+            if (tree != null) {
+                tree.propagateElementTypeToChildren(this);
+            }
+        }
     }
 
     @Override

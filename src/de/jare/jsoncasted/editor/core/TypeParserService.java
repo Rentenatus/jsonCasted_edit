@@ -368,36 +368,6 @@ public class TypeParserService implements TypeParserListener {
             oldType = ((EditNodeObject) node).getJsonType();
         }
 
-        // Element type propagation: object nodes under a collection property
-        // (LIST/ARRAY) or under a single-object field take the element type
-        // from the property's field descriptor, as long as they carry no
-        // explicit cast name of their own. This types the anonymous "Object"
-        // nodes the tree converter creates for nested values: array elements
-        // and object-valued single fields alike. Single fields only
-        // propagate when the element type is not primitive - object children
-        // under a primitive field are not the converter's doing.
-        if (node instanceof EditNodeObject && node.getParent() instanceof EditNodeProperty) {
-            final EditNodeObject elementNode = (EditNodeObject) node;
-            final EditNodeProperty containingProperty = (EditNodeProperty) node.getParent();
-            final JsonFieldDescriptor containingField = containingProperty.getJsonField();
-            if ((elementNode.getCastName() == null || elementNode.getCastName().isEmpty()
-                    || elementNode.getCastName().equals(elementNode.getName()))
-                    && containingField != null
-                    && containingField.getCollectionType() != null) {
-                final JsonTypeDescriptor elementType = model.getType(containingField.getTypeName());
-                if (elementType != null
-                        && (containingField.getCollectionType() != JsonCollectionType.NONE
-                        || !elementType.isPrimitive())) {
-                    elementNode.setCastName(elementType.getTypeName());
-                }
-            }
-        }
-
-        // Capture the old field of a property to detect field changes for the
-        // element cascade below.
-        JsonFieldDescriptor oldField = (node instanceof EditNodeProperty)
-                ? ((EditNodeProperty) node).getJsonField() : null;
-
         // Perform type assignment using the existing tryAssignType method.
         // tryAssignType handles its own errors via EditStatus and never throws.
         boolean typeAssigned;
@@ -443,12 +413,30 @@ public class TypeParserService implements TypeParserListener {
             }
         }
 
-        // If a property received its field anew, re-queue its children (the
-        // collection elements) so they can adopt the element type.
-        if (node instanceof EditNodeProperty
-                && ((EditNodeProperty) node).getJsonField() != oldField
-                && node.getChildCount() > 0) {
-            queueChildrenForReparse(node);
+        // Element type validation: an object node under a property with a
+        // resolved field must fit the element type declared by that field.
+        // Explicit casts (user input, _class) are decisions - a mismatch is
+        // reported, never silently overwritten. Inherited casts were already
+        // redirected by the propagation at the field event, so a mismatch
+        // here means an explicit decision that no longer fits the field.
+        if (node instanceof EditNodeObject && node.getParent() instanceof EditNodeProperty) {
+            final EditNodeObject objectNode = (EditNodeObject) node;
+            final EditNodeProperty containingProperty = (EditNodeProperty) node.getParent();
+            final JsonFieldDescriptor containingField = containingProperty.getJsonField();
+            final JsonTypeDescriptor actual = objectNode.getJsonType();
+            if (containingField != null && actual != null) {
+                final JsonTypeDescriptor expected = model.getType(containingField.getTypeName());
+                if (expected != null
+                        && (containingField.getCollectionType() != JsonCollectionType.NONE
+                        || !expected.isPrimitive())
+                        && !expected.contains(actual)
+                        && !actual.containsSuper(expected)) {
+                    node.setEditStatus(EditStatus.ERROR);
+                    node.setEditMessage("Element type '" + actual.getTypeName()
+                            + "' does not match the element type '" + expected.getTypeName()
+                            + "' of field '" + containingField.getFieldName() + "'");
+                }
+            }
         }
 
         // For EditNodeObject without an explicit cast decision: try to infer
@@ -456,7 +444,8 @@ public class TypeParserService implements TypeParserListener {
         // (set coverage). This runs even after a failed name-based
         // assignment - a node whose cast still equals its name carries no
         // explicit decision and is exactly what inference is for.
-        if (node instanceof EditNodeObject && hasNoExplicitCast((EditNodeObject) node)) {
+        if (node instanceof EditNodeObject && (hasNoExplicitCast((EditNodeObject) node)
+                || isInheritedInterfaceCast((EditNodeObject) node))) {
             try {
                 tryInferOwnType((EditNodeObject) node, model);
             } catch (Exception e) {
@@ -501,6 +490,21 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
+     * Checks whether the node carries an inherited cast whose type is an
+     * interface with implementors. Such a cast is only the approximate
+     * answer: the field set inference may refine it to a concrete
+     * implementor, while the inherited interface type remains the fallback
+     * when no unique candidate exists.
+     *
+     * @param node the object node to check
+     * @return true if the cast is inherited and the type is an interface
+     */
+    private boolean isInheritedInterfaceCast(EditNodeObject node) {
+        return node.isCastInherited() && node.getJsonType() != null
+                && !node.getJsonType().getImplementors().isEmpty();
+    }
+
+    /**
      * Attempts to infer the type of an untyped EditNodeObject from the field names of its property children. The
      * candidates are the types declaring ALL of these fields (set coverage); if exactly one type covers the whole
      * set, it is assigned, the node is re-queued for a clean parse and its children are re-queued so their fields
@@ -512,6 +516,11 @@ public class TypeParserService implements TypeParserListener {
      * @param model the JsonModelDescriptor to use for type lookups
      */
     private void tryInferOwnType(EditNodeObject node, JsonModelDescriptor model) {
+        // An inherited interface cast is an approximation: the inference may
+        // refine it to a concrete implementor, but finding no candidate is
+        // not a defect - the interface type stays as the approximate answer.
+        final boolean inheritedApproximation = isInheritedInterfaceCast(node);
+
         // Collect the field names of the property children.
         final List<String> fieldNames = new ArrayList<>();
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -549,7 +558,7 @@ public class TypeParserService implements TypeParserListener {
         }
 
         if (candidates == null || candidates.size() != 1) {
-            if (candidates != null && candidates.size() > 1) {
+            if (!inheritedApproximation && candidates != null && candidates.size() > 1) {
                 node.setEditStatus(EditStatus.WARNING);
                 node.setEditMessage("Type is ambiguous by fields " + fieldNames
                         + " (" + candidates.size() + " candidate types)");
@@ -558,6 +567,10 @@ public class TypeParserService implements TypeParserListener {
         }
 
         final JsonTypeDescriptor inferred = candidates.get(0);
+        if (inheritedApproximation && node.getJsonType() != null
+                && inferred.getTypeName().equals(node.getJsonType().getTypeName())) {
+            return; // field coverage confirms the inherited type - nothing to refine
+        }
         node.setJsonType(inferred);
         node.setCastName(inferred.getTypeName());
         node.markOkay(model);
