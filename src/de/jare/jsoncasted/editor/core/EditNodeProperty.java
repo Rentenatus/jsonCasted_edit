@@ -321,7 +321,9 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         final EditNode parent = getParent();
 
         if (parent instanceof EditNodeProperty fieldNode) {
-            // Field level annotation anchored under its field node.
+            // Field level annotation anchored under its field node. An explicit
+            // field declaration wins; without one, a wildcard declaration of
+            // the owning type (doc:*) covers the field.
             final JsonFieldDescriptor field = fieldNode.getJsonField();
             if (field == null) {
                 setEditStatus(EditStatus.WARNING);
@@ -329,13 +331,20 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
                 typeAnnotationRows();
                 return false;
             }
-            return checkAnnotationDeclaration(descriptor, field.getAnnotation(annName),
+            JsonAnnotation declared = field.getAnnotation(annName);
+            if (declared == null && fieldNode.getParent() instanceof EditNodeObject fieldOwner) {
+                declared = AnnotationKeys.findWildcardDeclaration(fieldOwner.getJsonType(), annName,
+                        fieldNode.getName());
+            }
+            return checkAnnotationDeclaration(descriptor, declared,
                     "field '" + field.getFieldName() + "'");
         }
 
         if (parent instanceof EditNodeObject parentObject) {
             if (target == null) {
-                // Object level annotation.
+                // Object level annotation. A pure wildcard declaration (doc:*)
+                // covers the type itself as well, prefix patterns stay field
+                // specific.
                 final JsonTypeDescriptor parentType = parentObject.getJsonType();
                 if (parentType == null) {
                     setEditStatus(EditStatus.WARNING);
@@ -343,7 +352,11 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
                     typeAnnotationRows();
                     return false;
                 }
-                return checkAnnotationDeclaration(descriptor, parentType.getAnnotation(annName),
+                JsonAnnotation declared = parentType.getAnnotation(annName);
+                if (declared == null) {
+                    declared = AnnotationKeys.findWildcardDeclaration(parentType, annName, "*");
+                }
+                return checkAnnotationDeclaration(descriptor, declared,
                         "type '" + parentType.getTypeName() + "'");
             }
 

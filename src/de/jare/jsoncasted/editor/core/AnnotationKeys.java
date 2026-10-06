@@ -75,4 +75,64 @@ public final class AnnotationKeys {
         }
         return key.substring(key.indexOf(SEPARATOR) + 1);
     }
+
+    /**
+     * Checks whether the given pattern matches the target. The pattern is a simple * miniregex: every '*' matches
+     * an arbitrary sequence of characters (including none), all other characters are literal.
+     *
+     * @param pattern the pattern with optional '*' wildcards
+     * @param target the target to match against
+     * @return true if the pattern matches the target
+     */
+    public static boolean matchesPattern(String pattern, String target) {
+        if (pattern == null || target == null) {
+            return false;
+        }
+        if (!pattern.contains("*")) {
+            return pattern.equals(target);
+        }
+        final StringBuilder regex = new StringBuilder();
+        for (int i = 0; i < pattern.length(); i++) {
+            final char c = pattern.charAt(i);
+            if (c == '*') {
+                regex.append(".*");
+            } else {
+                regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+            }
+        }
+        return target.matches(regex.toString());
+    }
+
+    /**
+     * Finds the wildcard declaration of the given annotation for the named target among the type's annotations: an
+     * entry in composite form ({@code name:pattern}) whose annotation name matches and whose * miniregex pattern
+     * matches the target. A declared {@code doc:*} on a type therefore covers every field (pass the field name as
+     * the target) and the object level itself (pass {@code "*"} as the target - only the pure wildcard covers the
+     * type, prefix patterns stay field specific).
+     *
+     * @param type the type descriptor with the declared annotations
+     * @param annName the plain annotation name without prefix and target
+     * @param target the target the pattern must match
+     * @return the matching wildcard declaration, or {@code null} if none matches
+     */
+    public static de.jare.jsoncasted.model.item.JsonAnnotation findWildcardDeclaration(
+            de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor type, String annName, String target) {
+        if (type == null || annName == null || target == null) {
+            return null;
+        }
+        for (de.jare.jsoncasted.model.item.JsonAnnotation next : type.getAnnotations()) {
+            final String name = next.getName();
+            final int cut = name.indexOf(SEPARATOR);
+            if (cut < PREFIX.length()) {
+                continue;
+            }
+            final String candidate = name.substring(0, cut);
+            final String pattern = name.substring(cut + 1);
+            if (annName.equals(candidate) && matchesPattern(pattern, target)) {
+                return next;
+            }
+        }
+        return null;
+    }
 }
+

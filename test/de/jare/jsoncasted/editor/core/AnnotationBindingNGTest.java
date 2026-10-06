@@ -125,6 +125,58 @@ public class AnnotationBindingNGTest {
                 "The re-bound annotation must be OKAY again: " + docProp.getEditMessage());
     }
 
+
+    /**
+     * The * miniregex for composite targets: a pure wildcard declaration (doc:*) covers every field of the type and
+     * the object level, a prefix pattern covers only matching fields, an explicit field declaration wins, and
+     * undeclared names stay tolerated warnings.
+     */
+    @Test
+    public void testWildcardDeclarationCoversFields() throws Exception {
+        final JsonConfigDefinition definition = new JsonConfigDefinition();
+        definition.getRootClass().addAnnotation("hint:comm*");
+        definition.getRootClass().getField("comments").addAnnotation("doc");
+
+        final EditNodeObject root = new EditNodeObject("seedConfig");
+        root.setCastName("de.jare.jsonconfig.item.ConfigRoot");
+
+        final EditNodeProperty comments = new EditNodeProperty("comments", JsonNodeType.ARRAY);
+        root.addChild(comments, new EditTimes());
+        final EditNodeProperty docOnComments = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        comments.addChild(docOnComments, new EditTimes());
+        final EditNodeProperty hintOnComments = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        comments.addChild(hintOnComments, new EditTimes());
+
+        final EditNodeProperty profiles = new EditNodeProperty("profiles", JsonNodeType.ARRAY);
+        root.addChild(profiles, new EditTimes());
+        final EditNodeProperty docOnProfiles = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        profiles.addChild(docOnProfiles, new EditTimes());
+        final EditNodeProperty hintOnProfiles = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        profiles.addChild(hintOnProfiles, new EditTimes());
+
+        final EditNodeProperty docType = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        root.addChild(docType, new EditTimes());
+        final EditNodeProperty dokType = new EditNodeProperty("@dok", JsonNodeType.ARRAY);
+        root.addChild(dokType, new EditTimes());
+
+        final EditTree tree = new EditTree(root, new EditTimes());
+        tree.setJsonModelDescriptor(definition.getDescriptor());
+        waitForParser(tree);
+
+        assertEquals(docOnComments.getEditStatus(), EditStatus.OKAY,
+                "An explicit field doc declaration binds OKAY: " + docOnComments.getEditMessage());
+        assertEquals(docOnProfiles.getEditStatus(), EditStatus.OKAY,
+                "The doc:* wildcard covers fields without an explicit declaration: " + docOnProfiles.getEditMessage());
+        assertEquals(hintOnComments.getEditStatus(), EditStatus.OKAY,
+                "A prefix pattern covers matching fields: " + hintOnComments.getEditMessage());
+        assertEquals(hintOnProfiles.getEditStatus(), EditStatus.WARNING,
+                "A prefix pattern leaves other fields undeclared: " + hintOnProfiles.getEditMessage());
+        assertEquals(docType.getEditStatus(), EditStatus.OKAY,
+                "A pure wildcard covers the object level too: " + docType.getEditMessage());
+        assertEquals(dokType.getEditStatus(), EditStatus.WARNING,
+                "Undeclared names stay tolerated warnings: " + dokType.getEditMessage());
+    }
+
     // ========== Helpers ==========
 
     /**
