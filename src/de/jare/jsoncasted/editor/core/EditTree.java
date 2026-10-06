@@ -1173,6 +1173,19 @@ public class EditTree {
         if (parent instanceof EditNodeProperty) {
             propagateElementTypeToChildren((EditNodeProperty) parent);
         }
+        // A new field lets waiting annotations re-bind: orphaned composite
+        // anchors targeting the new child are re-queued so the parse cascade
+        // moves them under the field node (annotation concept, decision 7).
+        if (parent instanceof EditNodeObject owner && !AnnotationKeys.isAnnotationKey(child.getName())) {
+            final String fieldName = child.getName();
+            for (int i = 0; i < owner.getChildCount(); i++) {
+                if (owner.getChildAt(i) instanceof EditNodeProperty sibling
+                        && AnnotationKeys.isCompositeKey(sibling.getName())
+                        && fieldName.equals(AnnotationKeys.targetField(sibling.getName()))) {
+                    markForReparse(sibling);
+                }
+            }
+        }
         if (parseMode == ParseMode.HARD_PARSE) {
             // TODO hard parse: the automatic tryAssignType in the tree-level
             // add methods resolves the anonymous placeholder "Object" via
@@ -1263,6 +1276,19 @@ public class EditTree {
         if (jsonModelDescriptor == null) {
             return;
         }
+
+        // An annotation property ({@code @name}) is implicitly an array of
+        // strings: its rows adopt the String element type. Annotations
+        // anchored under a field node are no collection elements of that
+        // field (annotation concept, decision 6).
+        if (AnnotationKeys.isAnnotationKey(property.getName())) {
+            final JsonTypeDescriptor stringType = jsonModelDescriptor.getType("String");
+            if (stringType != null) {
+                handElementTypeToChildren(property, stringType);
+            }
+            return;
+        }
+
         JsonTypeDescriptor expected = null;
         boolean collection = false;
         final JsonFieldDescriptor field = property.getJsonField();
@@ -1288,6 +1314,22 @@ public class EditTree {
         if (!collection && expected.isPrimitive()) {
             return;
         }
+        handElementTypeToChildren(property, expected);
+    }
+
+    /**
+     * Hands the given element type to the object children of the property,
+     * applying the state-aware rules described in
+     * {@link #propagateElementTypeToChildren(EditNodeProperty)}: unconfirmed
+     * children without an explicit cast decision get the element type as an
+     * inherited pre-assignment and are queued for the confirming pass,
+     * confirmed children stay untouched while their type fits, and confirmed
+     * children with a non-fitting type are queued again.
+     *
+     * @param property the property whose children receive the element type
+     * @param expected the expected element type
+     */
+    private void handElementTypeToChildren(EditNodeProperty property, JsonTypeDescriptor expected) {
         for (int i = 0; i < property.getChildCount(); i++) {
             if (!(property.getChildAt(i) instanceof EditNodeObject)) {
                 continue;
