@@ -891,9 +891,11 @@ public class EditTree {
                 }
             }
             case HARD_PARSE -> {
-                ensureParserService();
-                drainParseQueue();
-                stopParserService();
+                if (jsonModelDescriptor != null) {
+                    ensureParserService();
+                    drainParseQueue();
+                    stopParserService();
+                }
             }
             default -> {
                 // No further action
@@ -976,6 +978,14 @@ public class EditTree {
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
+        if (jsonModelDescriptor == null) {
+            // No model: the parser sleeps (like WITHOUT_SEMANTICS) - no
+            // service is started and nothing is queued.
+            stopParserService();
+            parseQueue.clear();
+            pendingNodes.clear();
+            return;
+        }
 
         switch (parseMode) {
             case SOFT_PARSE -> {
@@ -1125,7 +1135,7 @@ public class EditTree {
      * @param newName the new name
      */
     public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1145,7 +1155,7 @@ public class EditTree {
      * @param newValue the new value (may be null)
      */
     public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1164,7 +1174,7 @@ public class EditTree {
      * @param child the child node that was added
      */
     public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         // A child under a property with a resolved field receives the
@@ -1215,7 +1225,7 @@ public class EditTree {
      * @param child the child node that was removed
      */
     public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1233,7 +1243,7 @@ public class EditTree {
      * @param node the node whose type descriptor was changed
      */
     public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1270,7 +1280,7 @@ public class EditTree {
      * @param property the property whose children receive the element type
      */
     void propagateElementTypeToChildren(EditNodeProperty property) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS || property == null) {
+        if (parserAsleep() || property == null) {
             return;
         }
         if (jsonModelDescriptor == null) {
@@ -1358,6 +1368,17 @@ public class EditTree {
             child.setInheritedCast(expected);
             markForReparse(child);
         }
+    }
+
+    /**
+     * The parser sleeps without a model, exactly like in WITHOUT_SEMANTICS mode: a tree without a loaded
+     * descriptor has nothing to check against, so no node is queued and no parse pass runs. Loading a
+     * descriptor (or switching the mode with a present descriptor) wakes it up again.
+     *
+     * @return true when the parser has nothing to work with and must stay quiet
+     */
+    private boolean parserAsleep() {
+        return parseMode == ParseMode.WITHOUT_SEMANTICS || jsonModelDescriptor == null;
     }
 
     /**
