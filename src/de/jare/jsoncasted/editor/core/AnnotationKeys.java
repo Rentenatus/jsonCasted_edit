@@ -24,6 +24,11 @@ public final class AnnotationKeys {
      */
     public static final String SEPARATOR = ":";
 
+    /**
+     * Type key for annotation nodes (renderer colors, search filters).
+     */
+    public static final String FOREANNOTATION = "fore.annotation";
+
     private AnnotationKeys() {
         throw new IllegalStateException("Utility class");
     }

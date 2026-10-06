@@ -610,6 +610,9 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
 
     @Override
     public String getTypeKey() {
+        if (AnnotationKeys.isAnnotationKey(getName())) {
+            return AnnotationKeys.FOREANNOTATION;
+        }
         return type == JsonNodeType.ARRAY ? FOREARRAY : FOREPROPERTY;
     }
 
