@@ -46,6 +46,17 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile String castName;
 
     /**
+     * Provenance of the cast: {@code true} when the cast was inherited from
+     * the element type of the containing property's field descriptor (a
+     * pre-assignment by the element type propagation) instead of being an
+     * explicit decision (user input, {@code _class} in the JSON or the
+     * parser's own type resolution). An inherited cast stays redirectable:
+     * a later field event may overwrite it, and the field set inference may
+     * still refine an inherited interface cast to a concrete implementor.
+     */
+    private volatile boolean castInherited;
+
+    /**
      * Creates a new EditNodeObject with the specified value.
      *
      * @param objektValue the value/name for this object node
@@ -175,6 +186,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setCastName(String castName) {
         final String oldCast = this.castName;
         this.castName = castName;
+        // An explicit cast (user input, _class, inference result) is a
+        // decision of its own and is no longer redirectable by the element
+        // type propagation.
+        this.castInherited = false;
 
         // Notify parser listener about a cast change - the cast name is the
         // primary parsing input for object nodes, so a changed cast must
@@ -183,6 +198,49 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         if (tree != null && !java.util.Objects.equals(oldCast, castName)) {
             tree.notifyTypeDescriptorChanged(this);
         }
+    }
+
+    /**
+     * Returns whether the current cast was inherited from the containing
+     * property's field descriptor instead of being decided explicitly.
+     *
+     * @return true if the cast is an inherited pre-assignment
+     */
+    public boolean isCastInherited() {
+        return castInherited;
+    }
+
+    /**
+     * Checks whether this node carries an explicit cast decision of its own:
+     * a cast that is set, differs from the anonymous placeholder name and was
+     * not inherited from the containing field. Explicit decisions are never
+     * overwritten by the element type propagation; a mismatch against the
+     * field's element type is reported by the parser instead.
+     *
+     * @return true if the cast is an explicit decision
+     */
+    public boolean hasExplicitCastDecision() {
+        return castName != null && !castName.isEmpty()
+                && !castName.equals(getName()) && !castInherited;
+    }
+
+    /**
+     * Adopts the element type inherited from the containing property's field
+     * descriptor. An inherited cast carries no decision of its own: the
+     * parser confirms it in a later pass, a field change may redirect it and
+     * the field set inference may refine an inherited interface cast. The
+     * parser is not notified here - the propagation caller queues the node
+     * for the confirming pass itself.
+     *
+     * @param elementType the element type descriptor to adopt, not null
+     */
+    void setInheritedCast(JsonTypeDescriptor elementType) {
+        if (elementType == null) {
+            return;
+        }
+        this.castInherited = true;
+        this.castName = elementType.getTypeName();
+        this.jsonType = elementType;
     }
 
     @Override
@@ -211,7 +269,13 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
         if (foundType != null) {
             setJsonType(foundType);
-            setCastName(foundType.getTypeName());
+            if (castInherited && foundType.getTypeName().equals(cast)) {
+                // Inherited pre-assignment confirmed: keep the inherited
+                // provenance so a later field event can redirect the cast.
+                castName = foundType.getTypeName();
+            } else {
+                setCastName(foundType.getTypeName());
+            }
             markOkay(descriptor);
             return true;
         } else {
@@ -280,6 +344,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             copy.addChildPhase2Fast(deepCopy);
         }
         copy.setCastName(castName);
+        copy.castInherited = castInherited;
         return copy;
     }
 
@@ -315,6 +380,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("objektId", new JackAttribut("objektId", getObjektId()));
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
         attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
+        attributes.put("|cast inherited", new JackAttribut("cast inherited", isCastInherited()));
         return putEditAttributes(attributes);
     }
 
@@ -350,6 +416,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut castNameAttr = props.get("|cast name");
         if (castNameAttr != null) {
             setCastName((String) castNameAttr.getValue());
+        }
+        JackAttribut castInheritedAttr = props.get("|cast inherited");
+        if (castInheritedAttr != null && Boolean.TRUE.equals(castInheritedAttr.getValue())) {
+            castInherited = true;
         }
     }
 

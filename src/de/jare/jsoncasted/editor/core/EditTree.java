@@ -6,6 +6,10 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.lang.JsonTerms;
+import de.jare.jsoncasted.model.JsonCollectionType;
+import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
+import de.jare.jsoncasted.model.descriptor.JsonFieldTypeNote;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.util.Set;
@@ -25,6 +29,8 @@ public class EditTree {
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
     private String descriptionFilePath;
+    private String providerName = JsonTerms.THIS_SYNONYM;
+    private ParseMode parseMode = ParseMode.SOFT_PARSE;
     private JsonModelDescriptor jsonModelDescriptor;
     private JsonTypeDescriptor rootType;
 
@@ -823,25 +829,192 @@ public class EditTree {
     }
 
     /**
-     * Sets the JsonModelDescriptor for this tree. Automatically starts the
-     * parser service if not already running.
+     * Returns the provider synonym this tree is loaded under. The main
+     * resource carries no provider alias of its own and defaults to
+     * {@code this}.
+     *
+     * @return the provider synonym
+     */
+    public String getProviderName() {
+        return providerName;
+    }
+
+    /**
+     * Sets the provider synonym this tree is displayed under.
+     *
+     * @param providerName the provider synonym to set
+     */
+    public void setProviderName(String providerName) {
+        this.providerName = providerName;
+    }
+
+    /**
+     * Returns the current parse mode of this tree.
+     *
+     * @return the parse mode, never {@code null}
+     */
+    public ParseMode getParseMode() {
+        return parseMode;
+    }
+
+    /**
+     * Sets the parse mode of this tree. WITHOUT_SEMANTICS stops the
+     * background parser and discards the parse queue. SOFT_PARSE starts
+     * the background parser and re-parses the whole tree. HARD_PARSE is
+     * only accepted when every node has the edit status OKAY; it drains
+     * the remaining parse queue synchronously and stops the background
+     * threads, because every following change is parsed synchronously
+     * by {@link #parseNow(EditNodeAbstract)}.
+     *
+     * @param newMode the parse mode to set, {@code null} is ignored
+     * @return true if the mode was applied, false if HARD_PARSE was
+     * rejected because the tree still contains parse problems
+     */
+    public boolean setParseMode(ParseMode newMode) {
+        if (newMode == null || newMode == parseMode) {
+            return true;
+        }
+        if (newMode == ParseMode.HARD_PARSE && findFirstNotOkay(getRoot()) != null) {
+            return false;
+        }
+        this.parseMode = newMode;
+        switch (newMode) {
+            case WITHOUT_SEMANTICS -> {
+                stopParserService();
+                parseQueue.clear();
+                pendingNodes.clear();
+            }
+            case SOFT_PARSE -> {
+                if (jsonModelDescriptor != null) {
+                    startParserService();
+                    triggerFullReparse();
+                }
+            }
+            case HARD_PARSE -> {
+                if (jsonModelDescriptor != null) {
+                    ensureParserService();
+                    drainParseQueue();
+                    stopParserService();
+                }
+            }
+            default -> {
+                // No further action
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Parses the given node and all nodes queued by the parse cascade
+     * synchronously on the calling thread. Used in HARD_PARSE mode so
+     * that every change is verified before the mutating call returns.
+     *
+     * @param node the node to parse, may be {@code null}
+     */
+    private void parseNow(EditNodeAbstract node) {
+        if (parseMode != ParseMode.HARD_PARSE || node == null) {
+            return;
+        }
+        ensureParserService();
+        parserService.parseNodeSafely(node);
+        drainParseQueue();
+    }
+
+    /**
+     * Processes the parse queue synchronously until it is empty.
+     * Cascades (nodes re-queued during parsing) are handled by the loop;
+     * the hash-based skip in the parser bounds the number of passes.
+     */
+    private void drainParseQueue() {
+        EditNodeAbstract queued;
+        while ((queued = parseQueue.poll()) != null) {
+            parserService.parseNodeSafely(queued);
+        }
+        pendingNodes.clear();
+    }
+
+    /**
+     * Creates the parser service instance without starting its
+     * background threads, so parseNodeSafely can be used for
+     * synchronous parsing.
+     */
+    private void ensureParserService() {
+        if (parserService == null) {
+            parserService = new TypeParserService(this);
+        }
+    }
+
+    /**
+     * Returns the first node whose edit status is not OKAY.
+     *
+     * @param node the node to check together with its children
+     * @return the first offending node, or {@code null} if none
+     */
+    private EditNodeAbstract findFirstNotOkay(EditNodeAbstract node) {
+        if (node == null) {
+            return null;
+        }
+        if (node.getEditStatus() != EditStatus.OKAY) {
+            return node;
+        }
+        for (EditNode child : node.getChildren()) {
+            if (child instanceof EditNodeAbstract absChild) {
+                EditNodeAbstract offender = findFirstNotOkay(absChild);
+                if (offender != null) {
+                    return offender;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sets the JsonModelDescriptor for this tree. In SOFT_PARSE mode the
+     * background parser is started and the whole tree is queued for
+     * parsing; in HARD_PARSE mode the tree is parsed synchronously; in
+     * WITHOUT_SEMANTICS mode nothing happens.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
+        if (jsonModelDescriptor == null) {
+            // No model: the parser sleeps (like WITHOUT_SEMANTICS) - no
+            // service is started and nothing is queued.
+            stopParserService();
+            parseQueue.clear();
+            pendingNodes.clear();
+            return;
+        }
 
-        // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
-        startParserService();
+        switch (parseMode) {
+            case SOFT_PARSE -> {
+                // Starte den Parser-Service automatisch, wenn ein Modell gesetzt wird
+                startParserService();
 
-        // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
-        // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
-        // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
-        if (parserService != null && parserService.isRunning()) {
-            // Markiere alle Knoten als EDITED, damit sie geparst werden
-            markAllNodesAsEdited(getRoot());
-            // Alle Knoten zur Queue hinzufügen, nicht nur Root
-            queueAllNodesForParsing(getRoot());
+                // Füge alle Knoten zur Parse-Queue hinzu, um das asynchrone Parsen zu starten.
+                // Die frühere synchrone Zuordnung via assignTypesFromModel() wurde entfernt,
+                // da sie doppelt mit dem asynchronen Parser ausgeführt wurde.
+                if (parserService != null && parserService.isRunning()) {
+                    // Markiere alle Knoten als EDITED, damit sie geparst werden
+                    markAllNodesAsEdited(getRoot());
+                    // Alle Knoten zur Queue hinzufügen, nicht nur Root
+                    queueAllNodesForParsing(getRoot());
+                }
+            }
+            case HARD_PARSE -> {
+                // Synchron: alle Knoten sofort verarbeiten
+                ensureParserService();
+                markAllNodesAsEdited(getRoot());
+                queueAllNodesForParsing(getRoot());
+                drainParseQueue();
+            }
+            case WITHOUT_SEMANTICS -> {
+                // Parser schläft; nichts zu tun
+            }
+            default -> {
+                // No further action
+            }
         }
     }
 
@@ -962,6 +1135,13 @@ public class EditTree {
      * @param newName the new name
      */
     public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
+        if (parserAsleep()) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onNodeNameChanged(node, oldName, newName);
         }
@@ -975,6 +1155,13 @@ public class EditTree {
      * @param newValue the new value (may be null)
      */
     public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
+        if (parserAsleep()) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onNodeValueChanged(node, oldValue, newValue);
         }
@@ -987,6 +1174,45 @@ public class EditTree {
      * @param child the child node that was added
      */
     public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserAsleep()) {
+            return;
+        }
+        // A child under a property with a resolved field receives the
+        // declared element type immediately, so the parse pass triggered
+        // below confirms it instead of seeing an anonymous placeholder.
+        if (parent instanceof EditNodeProperty) {
+            propagateElementTypeToChildren((EditNodeProperty) parent);
+        }
+        // A new field lets waiting annotations re-bind: orphaned composite
+        // anchors targeting the new child are re-queued so the parse cascade
+        // moves them under the field node (annotation concept, decision 7).
+        if (parent instanceof EditNodeObject owner && !AnnotationKeys.isAnnotationKey(child.getName())) {
+            final String fieldName = child.getName();
+            for (int i = 0; i < owner.getChildCount(); i++) {
+                if (owner.getChildAt(i) instanceof EditNodeProperty sibling
+                        && AnnotationKeys.isCompositeKey(sibling.getName())
+                        && fieldName.equals(AnnotationKeys.targetField(sibling.getName()))) {
+                    markForReparse(sibling);
+                }
+            }
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            // TODO hard parse: the automatic tryAssignType in the tree-level
+            // add methods resolves the anonymous placeholder "Object" via
+            // the model's catch-all type and setCastName() then parses the
+            // node immediately (parseNow), so the child is DONE + OKAY with
+            // a name-derived cast BEFORE this propagation runs. The
+            // confirmed branch then only requeues the mismatching child
+            // instead of redirecting it, and the element ends up as an
+            // ERROR "does not match" instead of the field's element type.
+            // Fix ideas: run the propagation before the auto-typing, or let
+            // the auto-typing skip anonymous placeholder nodes under
+            // field-carrying properties. Parked for now - SOFT_PARSE is the
+            // supported mode for element typing.
+            parseNow(parent);
+            parseNow(child);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onChildAdded(parent, child);
         }
@@ -999,6 +1225,13 @@ public class EditTree {
      * @param child the child node that was removed
      */
     public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
+        if (parserAsleep()) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(parent);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onChildRemoved(parent, child);
         }
@@ -1010,8 +1243,156 @@ public class EditTree {
      * @param node the node whose type descriptor was changed
      */
     public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
+        if (parserAsleep()) {
+            return;
+        }
+        if (parseMode == ParseMode.HARD_PARSE) {
+            parseNow(node);
+            return;
+        }
         if (parserListener != null) {
             parserListener.onTypeDescriptorChanged(node);
+        }
+    }
+
+    /**
+     * Hands the element type declared by the given property's field
+     * descriptor to the property's object children. Runs at the field event
+     * ({@link EditNodeProperty#setJsonField}) and whenever a child is added
+     * under a field-carrying property, so collection elements carry their
+     * type immediately instead of waiting for the next parse generation.
+     * Map entries carry no field: there the value type comes from the
+     * mapping of the parent map type ({@code mappingAllFields}).
+     * <p>
+     * State-aware rules: children without a confirmed parse result and
+     * without an explicit cast decision get the element type as an inherited
+     * pre-assignment and are queued for the confirming pass. Children
+     * confirmed as DONE + OKAY stay untouched while their type fits the
+     * expected element type ({@code contains}, including implementors, or
+     * {@code containsSuper} for subtypes); a confirmed child with a
+     * non-fitting type is queued - an inherited cast is redirected to the
+     * new element type, an explicit cast (user input, {@code _class}) keeps
+     * its decision and the parser reports the mismatch. Children with an
+     * explicit cast decision are never overwritten. In WITHOUT_SEMANTICS
+     * mode nothing happens - the parser sleeps.
+     * </p>
+     *
+     * @param property the property whose children receive the element type
+     */
+    void propagateElementTypeToChildren(EditNodeProperty property) {
+        if (parserAsleep() || property == null) {
+            return;
+        }
+        if (jsonModelDescriptor == null) {
+            return;
+        }
+
+        // An annotation property ({@code @name}) is implicitly an array of
+        // strings: its rows adopt the String element type. Annotations
+        // anchored under a field node are no collection elements of that
+        // field (annotation concept, decision 6).
+        if (AnnotationKeys.isAnnotationKey(property.getName())) {
+            final JsonTypeDescriptor stringType = jsonModelDescriptor.getType("String");
+            if (stringType != null) {
+                handElementTypeToChildren(property, stringType);
+            }
+            return;
+        }
+
+        JsonTypeDescriptor expected = null;
+        boolean collection = false;
+        final JsonFieldDescriptor field = property.getJsonField();
+        if (field != null) {
+            expected = jsonModelDescriptor.getType(field.getTypeName());
+            collection = field.getCollectionType() != JsonCollectionType.NONE;
+        } else if (property.getParent() instanceof EditNodeObject mapObject
+                && mapObject.getJsonType() != null
+                && mapObject.getJsonType().getMappingAllFields() != null) {
+            // Map entry without a JsonField: the value semantics come from
+            // the mapping of the parent map type (value type plus optional
+            // collection type), so elements under map keys adopt the mapped
+            // value type.
+            final JsonFieldTypeNote mapping = mapObject.getJsonType().getMappingAllFields();
+            expected = jsonModelDescriptor.getType(mapping.getTypeName());
+            collection = mapping.getCollectionType() != JsonCollectionType.NONE;
+        }
+        if (expected == null) {
+            return;
+        }
+        // Object children under a primitive single field are not the tree
+        // converter's doing - no propagation there.
+        if (!collection && expected.isPrimitive()) {
+            return;
+        }
+        handElementTypeToChildren(property, expected);
+    }
+
+    /**
+     * Hands the given element type to the object children of the property,
+     * applying the state-aware rules described in
+     * {@link #propagateElementTypeToChildren(EditNodeProperty)}: unconfirmed
+     * children without an explicit cast decision get the element type as an
+     * inherited pre-assignment and are queued for the confirming pass,
+     * confirmed children stay untouched while their type fits, and confirmed
+     * children with a non-fitting type are queued again.
+     *
+     * @param property the property whose children receive the element type
+     * @param expected the expected element type
+     */
+    private void handElementTypeToChildren(EditNodeProperty property, JsonTypeDescriptor expected) {
+        for (int i = 0; i < property.getChildCount(); i++) {
+            if (!(property.getChildAt(i) instanceof EditNodeObject)) {
+                continue;
+            }
+            final EditNodeObject child = (EditNodeObject) property.getChildAt(i);
+            final JsonTypeDescriptor current = child.getJsonType();
+            if (child.getParseState() == ParseState.DONE
+                    && child.getEditStatus() == EditStatus.OKAY) {
+                // Confirmed decision: untouched when it still fits.
+                if (current != null && (expected.contains(current)
+                        || current.containsSuper(expected))) {
+                    continue;
+                }
+                if (child.isCastInherited()) {
+                    child.setInheritedCast(expected);
+                }
+                markForReparse(child);
+                continue;
+            }
+            if (child.hasExplicitCastDecision()) {
+                continue;
+            }
+            if (child.isCastInherited() && current == expected) {
+                continue; // already pre-assigned and queued
+            }
+            child.setInheritedCast(expected);
+            markForReparse(child);
+        }
+    }
+
+    /**
+     * The parser sleeps without a model, exactly like in WITHOUT_SEMANTICS mode: a tree without a loaded
+     * descriptor has nothing to check against, so no node is queued and no parse pass runs. Loading a
+     * descriptor (or switching the mode with a present descriptor) wakes it up again.
+     *
+     * @return true when the parser has nothing to work with and must stay quiet
+     */
+    private boolean parserAsleep() {
+        return parseMode == ParseMode.WITHOUT_SEMANTICS || jsonModelDescriptor == null;
+    }
+
+    /**
+     * Marks the given node as EDITED ("zu pruefen") and queues it for the
+     * next parse pass. In HARD_PARSE mode the queue is drained synchronously
+     * so the caller returns with the verified state.
+     *
+     * @param node the node to queue for re-parsing
+     */
+    private void markForReparse(EditNodeAbstract node) {
+        node.setParseState(ParseState.EDITED);
+        addToParseQueue(node);
+        if (parseMode == ParseMode.HARD_PARSE) {
+            drainParseQueue();
         }
     }
 

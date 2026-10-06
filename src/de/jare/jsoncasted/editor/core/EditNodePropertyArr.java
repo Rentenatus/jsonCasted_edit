@@ -112,6 +112,9 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
     // ========== Type identification ==========
     @Override
     public String getTypeKey() {
+        if (AnnotationKeys.isAnnotationKey(getName())) {
+            return AnnotationKeys.FOREANNOTATION;
+        }
         return FOREARRAY;
     }
 
