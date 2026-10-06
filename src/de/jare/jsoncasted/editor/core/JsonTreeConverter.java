@@ -28,6 +28,7 @@ import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import de.jare.jsoncasted.model.descriptor.def.JsonModelDescriptorDefinition;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -217,6 +218,7 @@ public final class JsonTreeConverter {
      */
     private static void convertJsonNodeToEditNode(EditNodeObject rootNode, JsonNode jsonNode, EditTimes weightMonitor) throws JsonParseException {
         Map<String, JsonNode> objectValues = jsonNode.asObjectValues();
+        List<Map.Entry<String, JsonNode>> deferredAnnotations = null;
         if (objectValues != null) {
             for (Map.Entry<String, JsonNode> entry : objectValues.entrySet()) {
                 String key = entry.getKey();
@@ -237,7 +239,22 @@ public final class JsonTreeConverter {
                     }
                     continue;
                 }
+                if (AnnotationKeys.isCompositeKey(key)) {
+                    // Composite annotation keys are resolved after the object's
+                    // fields are built: the annotation moves under its target
+                    // field node, so iteration order does not matter.
+                    if (deferredAnnotations == null) {
+                        deferredAnnotations = new ArrayList<>();
+                    }
+                    deferredAnnotations.add(entry);
+                    continue;
+                }
                 buildEditProperty(rootNode, entry, weightMonitor);
+            }
+        }
+        if (deferredAnnotations != null) {
+            for (Map.Entry<String, JsonNode> entry : deferredAnnotations) {
+                resolveCompositeAnnotation(rootNode, entry, weightMonitor);
             }
         }
     }
@@ -273,7 +290,21 @@ public final class JsonTreeConverter {
      */
     private static void buildEditProperty(EditNodeObject parent, Map.Entry<String, JsonNode> entry,
             EditTimes weightMonitor) throws JsonParseException {
-        String propertyName = entry.getKey();
+        buildEditProperty(parent, entry.getKey(), entry, weightMonitor);
+    }
+
+    /**
+     * Builds an EditProperty node under the given parent, using the given property name instead of the entry key
+     * (used for composite annotations, which land under their target field node with their plain annotation name).
+     *
+     * @param parent the parent node (object or property) to which the property will be added
+     * @param propertyName the property name to use for the node
+     * @param entry the map entry containing the property name and JSON node value
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
+     * @throws JsonParseException if JSON parsing fails during property construction
+     */
+    private static void buildEditProperty(EditNodeAbstract parent, String propertyName, Map.Entry<String, JsonNode> entry,
+            EditTimes weightMonitor) throws JsonParseException {
         EditNodeProperty editNode = new EditNodeProperty(propertyName != null ? propertyName : ".");
         parent.addChild(editNode, weightMonitor);
         JsonNode jsonNode = entry.getValue();
@@ -293,6 +324,31 @@ public final class JsonTreeConverter {
             return;
         }
         editNode.setValue(convertJsonValueToString(jsonNode));
+    }
+
+    /**
+     * Resolves a composite annotation key ({@code @doc:profile}): when the target field property exists under the
+     * object, the annotation is built as a child of that field node with its plain annotation name. Without the
+     * target field the annotation stays anchored at the object with its composite key - the parse cascade re-binds
+     * it as soon as a field of that name appears (annotation concept, decision 7).
+     *
+     * @param parent the object node holding the annotation entry
+     * @param entry the deferred annotation entry
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
+     * @throws JsonParseException if JSON parsing fails during property construction
+     */
+    private static void resolveCompositeAnnotation(EditNodeObject parent, Map.Entry<String, JsonNode> entry,
+            EditTimes weightMonitor) throws JsonParseException {
+        final String target = AnnotationKeys.targetField(entry.getKey());
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            final EditNode child = parent.getChildAt(i);
+            if (child instanceof EditNodeProperty fieldProp && target.equals(child.getName())) {
+                final String annotationName = AnnotationKeys.PREFIX + AnnotationKeys.annotationName(entry.getKey());
+                buildEditProperty(fieldProp, annotationName, entry, weightMonitor);
+                return;
+            }
+        }
+        buildEditProperty(parent, entry, weightMonitor);
     }
 
     /**

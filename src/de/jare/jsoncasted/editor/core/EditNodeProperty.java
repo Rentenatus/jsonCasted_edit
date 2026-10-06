@@ -10,6 +10,7 @@ import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import de.jare.jsoncasted.model.item.JsonAnnotation;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -204,6 +205,12 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             return false;
         }
 
+        // Annotations never resolve a field: they bind against the declared
+        // annotations of the field or type they are anchored at.
+        if (AnnotationKeys.isAnnotationKey(getName())) {
+            return tryAssignAnnotationType(descriptor);
+        }
+
         // Pruefen: Hat Parent einen JsonTypeDescriptor?
         EditNode parent = getParent();
         if (!(parent instanceof EditNodeObject)) {
@@ -296,6 +303,153 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
                 + "' (declared in " + declaringTypeNames.size() + " type(s): "
                 + String.join(", ", declaringTypeNames) + ")");
         return false;
+    }
+
+    /**
+     * Annotation binding path (annotation concept, decisions 6 to 8): a property with an {@code @} name is an
+     * annotation. Declared annotations bind OKAY; undeclared ones are free annotations and are tolerated with a
+     * WARNING instead of an error. Composite anchors ({@code @doc:profile}) resolve their target field and move
+     * under the field node; a missing target leaves the annotation anchored at the object with a WARNING - no
+     * synthetic null field is ever created.
+     *
+     * @param descriptor the model descriptor for the declaration lookup
+     * @return true when the annotation is declared, false for a tolerated or unresolved annotation
+     */
+    private boolean tryAssignAnnotationType(JsonModelDescriptor descriptor) {
+        final String annName = AnnotationKeys.annotationName(getName());
+        final String target = AnnotationKeys.targetField(getName());
+        final EditNode parent = getParent();
+
+        if (parent instanceof EditNodeProperty fieldNode) {
+            // Field level annotation anchored under its field node. An explicit
+            // field declaration wins; without one, a wildcard declaration of
+            // the owning type (doc:*) covers the field.
+            final JsonFieldDescriptor field = fieldNode.getJsonField();
+            if (field == null) {
+                setEditStatus(EditStatus.WARNING);
+                setEditMessage("Field of the annotated property is not resolved yet");
+                typeAnnotationRows();
+                return false;
+            }
+            JsonAnnotation declared = field.getAnnotation(annName);
+            if (declared == null && fieldNode.getParent() instanceof EditNodeObject fieldOwner) {
+                declared = AnnotationKeys.findWildcardDeclaration(fieldOwner.getJsonType(), annName,
+                        fieldNode.getName());
+            }
+            return checkAnnotationDeclaration(descriptor, declared,
+                    "field '" + field.getFieldName() + "'");
+        }
+
+        if (parent instanceof EditNodeObject parentObject) {
+            if (target == null) {
+                // Object level annotation. A pure wildcard declaration (doc:*)
+                // covers the type itself as well, prefix patterns stay field
+                // specific.
+                final JsonTypeDescriptor parentType = parentObject.getJsonType();
+                if (parentType == null) {
+                    setEditStatus(EditStatus.WARNING);
+                    setEditMessage("Parent has no type descriptor; annotation waits for binding");
+                    typeAnnotationRows();
+                    return false;
+                }
+                JsonAnnotation declared = parentType.getAnnotation(annName);
+                if (declared == null) {
+                    declared = AnnotationKeys.findWildcardDeclaration(parentType, annName, "*");
+                }
+                return checkAnnotationDeclaration(descriptor, declared,
+                        "type '" + parentType.getTypeName() + "'");
+            }
+
+            // Orphan composite anchor: when the target field property exists,
+            // move under it - the parse cascade re-binds this way. Otherwise
+            // stay anchored with a WARNING until the field appears.
+            final EditNode fieldNode = findChildByName(parentObject, target);
+            if (fieldNode instanceof EditNodeProperty fieldProp) {
+                rebindToFieldProperty(fieldProp, annName);
+                return false;
+            }
+            final JsonTypeDescriptor parentType = parentObject.getJsonType();
+            if (parentType != null && parentType.getField(target) == null) {
+                setEditStatus(EditStatus.WARNING);
+                setEditMessage("Target field '" + target + "' is not declared in type '"
+                        + parentType.getTypeName() + "'");
+                typeAnnotationRows();
+                return false;
+            }
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Target field '" + target + "' is missing; annotation stays anchored");
+            typeAnnotationRows();
+            return false;
+        }
+
+        setEditStatus(EditStatus.WARNING);
+        setEditMessage("Annotation has no binding context");
+        typeAnnotationRows();
+        return false;
+    }
+
+    /**
+     * Checks the declaration of the annotation and sets the edit status accordingly: OKAY with a confirmation
+     * message for a declared annotation, a WARNING for a tolerated free annotation.
+     *
+     * @param descriptor the model descriptor for the declaration lookup
+     * @param declared the declared annotation, or {@code null} for a free annotation
+     * @param where the binding context for the message (field or type name)
+     * @return true when the annotation is declared
+     */
+    private boolean checkAnnotationDeclaration(JsonModelDescriptor descriptor, JsonAnnotation declared, String where) {
+        typeAnnotationRows();
+        if (declared == null) {
+            setEditStatus(EditStatus.WARNING);
+            setEditMessage("Annotation is not declared for " + where + " (tolerated free annotation)");
+            return false;
+        }
+        setEditStatus(EditStatus.OKAY);
+        setEditMessage(declared.isTransient()
+                ? "ok, transient annotation, model=" + descriptor.getModelName()
+                : "ok, model=" + descriptor.getModelName());
+        return true;
+    }
+
+    /**
+     * Hands the implicit string element type to the rows of this annotation: an annotation is implicitly an array
+     * of strings, so its rows adopt the String type instead of waiting for a field resolution that never comes.
+     */
+    private void typeAnnotationRows() {
+        final EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.propagateElementTypeToChildren(this);
+        }
+    }
+
+    /**
+     * Moves this orphan composite annotation under the given field property and strips the composite anchor from
+     * the name. The move happens before the rename so the name change notification re-queues the node and the
+     * parse cascade re-evaluates it as a field level annotation under its new parent.
+     *
+     * @param fieldProp the target field property
+     * @param annName the plain annotation name without prefix and target
+     */
+    private void rebindToFieldProperty(EditNodeProperty fieldProp, String annName) {
+        fieldProp.addChild(this, new EditTimes());
+        setName(AnnotationKeys.PREFIX + annName);
+    }
+
+    /**
+     * Returns the child of the given object node with the specified name.
+     *
+     * @param parent the object node to search
+     * @param name the child name to find
+     * @return the child node, or {@code null} if none matches
+     */
+    private EditNode findChildByName(EditNodeObject parent, String name) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            final EditNode child = parent.getChildAt(i);
+            if (name.equals(child.getName())) {
+                return child;
+            }
+        }
+        return null;
     }
 
     /**
@@ -411,7 +565,25 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     // ========== Removal callback ==========
     @Override
     public void sayOnRemoved(EditNode parent) {
-        // No special handling for properties
+        // Resilience (annotation concept, decision 7): annotations anchored
+        // under this field are never silently removed with it. They fall back
+        // to the owning object with their composite anchor and are re-bound
+        // by the parse cascade as soon as a field of that name appears.
+        if (!(parent instanceof EditNodeObject owner)) {
+            return;
+        }
+        final List<EditNodeProperty> annotations = new ArrayList<>();
+        for (int i = 0; i < getChildCount(); i++) {
+            if (getChildAt(i) instanceof EditNodeProperty child
+                    && AnnotationKeys.isAnnotationKey(child.getName())) {
+                annotations.add(child);
+            }
+        }
+        for (EditNodeProperty annotation : annotations) {
+            final String annName = AnnotationKeys.annotationName(annotation.getName());
+            annotation.setName(AnnotationKeys.PREFIX + annName + AnnotationKeys.SEPARATOR + getName());
+            owner.addChild(annotation, new EditTimes());
+        }
     }
 
     @Override
@@ -438,6 +610,9 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
 
     @Override
     public String getTypeKey() {
+        if (AnnotationKeys.isAnnotationKey(getName())) {
+            return AnnotationKeys.FOREANNOTATION;
+        }
         return type == JsonNodeType.ARRAY ? FOREARRAY : FOREPROPERTY;
     }
 

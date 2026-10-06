@@ -527,7 +527,10 @@ public class TypeParserService implements TypeParserListener {
             final EditNode child = node.getChildAt(i);
             if (child instanceof EditNodeProperty) {
                 final String fieldName = child.getName();
-                if (fieldName != null && !fieldName.isEmpty()) {
+                // Annotations are no fields: they must not pollute the field
+                // set the inference is built on.
+                if (fieldName != null && !fieldName.isEmpty()
+                        && !AnnotationKeys.isAnnotationKey(fieldName)) {
                     fieldNames.add(fieldName);
                 }
             }

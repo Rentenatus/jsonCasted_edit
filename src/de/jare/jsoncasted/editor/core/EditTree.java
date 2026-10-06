@@ -891,9 +891,11 @@ public class EditTree {
                 }
             }
             case HARD_PARSE -> {
-                ensureParserService();
-                drainParseQueue();
-                stopParserService();
+                if (jsonModelDescriptor != null) {
+                    ensureParserService();
+                    drainParseQueue();
+                    stopParserService();
+                }
             }
             default -> {
                 // No further action
@@ -976,6 +978,14 @@ public class EditTree {
      */
     public void setJsonModelDescriptor(JsonModelDescriptor jsonModelDescriptor) {
         this.jsonModelDescriptor = jsonModelDescriptor;
+        if (jsonModelDescriptor == null) {
+            // No model: the parser sleeps (like WITHOUT_SEMANTICS) - no
+            // service is started and nothing is queued.
+            stopParserService();
+            parseQueue.clear();
+            pendingNodes.clear();
+            return;
+        }
 
         switch (parseMode) {
             case SOFT_PARSE -> {
@@ -1125,7 +1135,7 @@ public class EditTree {
      * @param newName the new name
      */
     public void notifyNodeNameChanged(EditNodeAbstract node, String oldName, String newName) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1145,7 +1155,7 @@ public class EditTree {
      * @param newValue the new value (may be null)
      */
     public void notifyNodeValueChanged(EditNodeAbstract node, String oldValue, String newValue) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1164,7 +1174,7 @@ public class EditTree {
      * @param child the child node that was added
      */
     public void notifyChildAdded(EditNodeAbstract parent, EditNodeAbstract child) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         // A child under a property with a resolved field receives the
@@ -1172,6 +1182,19 @@ public class EditTree {
         // below confirms it instead of seeing an anonymous placeholder.
         if (parent instanceof EditNodeProperty) {
             propagateElementTypeToChildren((EditNodeProperty) parent);
+        }
+        // A new field lets waiting annotations re-bind: orphaned composite
+        // anchors targeting the new child are re-queued so the parse cascade
+        // moves them under the field node (annotation concept, decision 7).
+        if (parent instanceof EditNodeObject owner && !AnnotationKeys.isAnnotationKey(child.getName())) {
+            final String fieldName = child.getName();
+            for (int i = 0; i < owner.getChildCount(); i++) {
+                if (owner.getChildAt(i) instanceof EditNodeProperty sibling
+                        && AnnotationKeys.isCompositeKey(sibling.getName())
+                        && fieldName.equals(AnnotationKeys.targetField(sibling.getName()))) {
+                    markForReparse(sibling);
+                }
+            }
         }
         if (parseMode == ParseMode.HARD_PARSE) {
             // TODO hard parse: the automatic tryAssignType in the tree-level
@@ -1202,7 +1225,7 @@ public class EditTree {
      * @param child the child node that was removed
      */
     public void notifyChildRemoved(EditNodeAbstract parent, EditNodeAbstract child) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1220,7 +1243,7 @@ public class EditTree {
      * @param node the node whose type descriptor was changed
      */
     public void notifyTypeDescriptorChanged(EditNodeAbstract node) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS) {
+        if (parserAsleep()) {
             return;
         }
         if (parseMode == ParseMode.HARD_PARSE) {
@@ -1257,12 +1280,25 @@ public class EditTree {
      * @param property the property whose children receive the element type
      */
     void propagateElementTypeToChildren(EditNodeProperty property) {
-        if (parseMode == ParseMode.WITHOUT_SEMANTICS || property == null) {
+        if (parserAsleep() || property == null) {
             return;
         }
         if (jsonModelDescriptor == null) {
             return;
         }
+
+        // An annotation property ({@code @name}) is implicitly an array of
+        // strings: its rows adopt the String element type. Annotations
+        // anchored under a field node are no collection elements of that
+        // field (annotation concept, decision 6).
+        if (AnnotationKeys.isAnnotationKey(property.getName())) {
+            final JsonTypeDescriptor stringType = jsonModelDescriptor.getType("String");
+            if (stringType != null) {
+                handElementTypeToChildren(property, stringType);
+            }
+            return;
+        }
+
         JsonTypeDescriptor expected = null;
         boolean collection = false;
         final JsonFieldDescriptor field = property.getJsonField();
@@ -1288,6 +1324,22 @@ public class EditTree {
         if (!collection && expected.isPrimitive()) {
             return;
         }
+        handElementTypeToChildren(property, expected);
+    }
+
+    /**
+     * Hands the given element type to the object children of the property,
+     * applying the state-aware rules described in
+     * {@link #propagateElementTypeToChildren(EditNodeProperty)}: unconfirmed
+     * children without an explicit cast decision get the element type as an
+     * inherited pre-assignment and are queued for the confirming pass,
+     * confirmed children stay untouched while their type fits, and confirmed
+     * children with a non-fitting type are queued again.
+     *
+     * @param property the property whose children receive the element type
+     * @param expected the expected element type
+     */
+    private void handElementTypeToChildren(EditNodeProperty property, JsonTypeDescriptor expected) {
         for (int i = 0; i < property.getChildCount(); i++) {
             if (!(property.getChildAt(i) instanceof EditNodeObject)) {
                 continue;
@@ -1316,6 +1368,17 @@ public class EditTree {
             child.setInheritedCast(expected);
             markForReparse(child);
         }
+    }
+
+    /**
+     * The parser sleeps without a model, exactly like in WITHOUT_SEMANTICS mode: a tree without a loaded
+     * descriptor has nothing to check against, so no node is queued and no parse pass runs. Loading a
+     * descriptor (or switching the mode with a present descriptor) wakes it up again.
+     *
+     * @return true when the parser has nothing to work with and must stay quiet
+     */
+    private boolean parserAsleep() {
+        return parseMode == ParseMode.WITHOUT_SEMANTICS || jsonModelDescriptor == null;
     }
 
     /**
