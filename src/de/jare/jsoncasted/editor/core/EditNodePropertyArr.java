@@ -14,16 +14,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents a JSON array property node in the tree structure. This is a
- * specialized property that is always of type ARRAY.
+ * Represents a JSON array property node in the tree structure. This is a specialized property that is always of type
+ * ARRAY.
  *
  * @author Jansuch Rentenatus
  */
 public final class EditNodePropertyArr extends EditNodeProperty implements EditNode {
 
     /**
-     * Creates a new array property with the given name. The type is
-     * automatically set to ARRAY.
+     * Creates a new array property with the given name. The type is automatically set to ARRAY.
      *
      */
     public EditNodePropertyArr() {
@@ -50,8 +49,7 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
     }
 
     /**
-     * Creates a new array property with the given parameters. The type is
-     * automatically set to ARRAY.
+     * Creates a new array property with the given parameters. The type is automatically set to ARRAY.
      *
      * @param editId the edit identifier
      * @param leftRange the left range value
@@ -112,10 +110,13 @@ public final class EditNodePropertyArr extends EditNodeProperty implements EditN
     // ========== Type identification ==========
     @Override
     public String getTypeKey() {
-        if (AnnotationKeys.isAnnotationKey(getName())) {
-            return AnnotationKeys.FOREANNOTATION;
-        }
         return FOREARRAY;
+    }
+
+    @Override
+    public boolean canBeParentOfAnnotation() {
+        // Array rows are collection elements - annotations never anchor there.
+        return false;
     }
 
     // ========== Attributes ==========

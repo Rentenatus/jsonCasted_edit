@@ -35,9 +35,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Utility class for converting between JSON data structures and EditTree
- * representations. Provides methods to create EditTree structures from JSON
- * files, strings, and JsonResource objects. Uses JsonParserService from the
+ * Utility class for converting between JSON data structures and EditTree representations. Provides methods to create
+ * EditTree structures from JSON files, strings, and JsonResource objects. Uses JsonParserService from the
  * jsoncasted.parserservice package for parsing operations.
  *
  * @author Janusch Rentenatus
@@ -71,9 +70,8 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Derives the display name for the root node from the provider name
-     * of the given resource. The main resource carries no provider alias
-     * of its own and therefore defaults to {@code this}.
+     * Derives the display name for the root node from the provider name of the given resource. The main resource
+     * carries no provider alias of its own and therefore defaults to {@code this}.
      *
      * @param resource the parsed JSON resource
      * @return the provider name, or {@code this} when the resource has none
@@ -181,8 +179,7 @@ public final class JsonTreeConverter {
      *
      * @param jsonNode the JSON node to import
      * @param rootName the name to use for the root node
-     * @param weightMonitor the EditTimes monitor for tracking tree construction
-     * metrics
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
      * @return the root EditNode containing the imported JSON structure
      * @throws JsonParseException if JSON parsing fails during import
      */
@@ -196,24 +193,18 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Converts a JSON node to an EditNode structure and adds it as children to
-     * the root node. Handles object values by creating EditProperty nodes for
-     * each entry.
+     * Converts a JSON node to an EditNode structure and adds it as children to the root node. Handles object values by
+     * creating EditProperty nodes for each entry.
      * <p>
-     * Metadata keys defined in {@link JsonTerms} (e.g. {@code _class},
-     * {@code _woodObjectId}, {@code _woodLink}, {@code _woodModel},
-     * {@code _woodProviders}) are filtered out and not added as child nodes. If
-     * a {@code _class} entry is present, its value is stored as the
-     * {@link EditNodeObject#setCastName(String) castName} on the root node so
-     * the parser can resolve the type via O(1) cache lookup on the first parse
-     * pass.
+     * Metadata keys defined in {@link JsonTerms} (e.g. {@code _class}, {@code _woodObjectId}, {@code _woodLink},
+     * {@code _woodModel}, {@code _woodProviders}) are filtered out and not added as child nodes. If a {@code _class}
+     * entry is present, its value is stored as the {@link EditNodeObject#setCastName(String) castName} on the root node
+     * so the parser can resolve the type via O(1) cache lookup on the first parse pass.
      * </p>
      *
-     * @param rootNode the root EditNodeObject to which child nodes will be
-     * added
+     * @param rootNode the root EditNodeObject to which child nodes will be added
      * @param jsonNode the JSON node to convert
-     * @param weightMonitor the EditTimes monitor for tracking tree construction
-     * metrics
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
      * @throws JsonParseException if JSON parsing fails during conversion
      */
     private static void convertJsonNodeToEditNode(EditNodeObject rootNode, JsonNode jsonNode, EditTimes weightMonitor) throws JsonParseException {
@@ -260,8 +251,8 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Checks whether a JSON property name is a metadata key that should be
-     * filtered out during tree construction, not added as an editable child.
+     * Checks whether a JSON property name is a metadata key that should be filtered out during tree construction, not
+     * added as an editable child.
      *
      * @param key the property name to check
      * @return true if the key is a reserved metadata term
@@ -275,18 +266,13 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Builds an EditProperty node from a JSON object entry and adds it to the
-     * parent node. Handles different JSON node types (array, object, primitive
-     * values).
+     * Builds an EditProperty node from a JSON object entry and adds it to the parent node. Handles different JSON node
+     * types (array, object, primitive values).
      *
-     * @param parent the parent EditNodeObject to which the property will be
-     * added
-     * @param entry the map entry containing the property name and JSON node
-     * value
-     * @param weightMonitor the EditTimes monitor for tracking tree construction
-     * metrics
-     * @throws JsonParseException if JSON parsing fails during property
-     * construction
+     * @param parent the parent EditNodeObject to which the property will be added
+     * @param entry the map entry containing the property name and JSON node value
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
+     * @throws JsonParseException if JSON parsing fails during property construction
      */
     private static void buildEditProperty(EditNodeObject parent, Map.Entry<String, JsonNode> entry,
             EditTimes weightMonitor) throws JsonParseException {
@@ -294,8 +280,8 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Builds an EditProperty node under the given parent, using the given property name instead of the entry key
-     * (used for composite annotations, which land under their target field node with their plain annotation name).
+     * Builds an EditProperty node under the given parent, using the given property name instead of the entry key (used
+     * for composite annotations, which land under their target field node with their plain annotation name).
      *
      * @param parent the parent node (object or property) to which the property will be added
      * @param propertyName the property name to use for the node
@@ -305,7 +291,11 @@ public final class JsonTreeConverter {
      */
     private static void buildEditProperty(EditNodeAbstract parent, String propertyName, Map.Entry<String, JsonNode> entry,
             EditTimes weightMonitor) throws JsonParseException {
-        EditNodeProperty editNode = new EditNodeProperty(propertyName != null ? propertyName : ".");
+        // An @ key is an annotation: the node class carries the kind, the
+        // name stays plain and the composite target is kept as its own field.
+        final EditNodeProperty editNode = AnnotationKeys.isAnnotationKey(propertyName)
+                ? new EditNodeAnnotation(AnnotationKeys.annotationName(propertyName))
+                : new EditNodeProperty(propertyName != null ? propertyName : ".");
         parent.addChild(editNode, weightMonitor);
         JsonNode jsonNode = entry.getValue();
         JsonNodeType type = jsonNode.getType();
@@ -328,9 +318,8 @@ public final class JsonTreeConverter {
 
     /**
      * Resolves a composite annotation key ({@code @doc:profile}): when the target field property exists under the
-     * object, the annotation is built as a child of that field node with its plain annotation name. Without the
-     * target field the annotation stays anchored at the object with its composite key - the parse cascade re-binds
-     * it as soon as a field of that name appears (annotation concept, decision 7).
+     * object, the annotation is built as a child of that field node. Without the target field the annotation falls back
+     * to a simple object level annotation - the composite target is structural and derived from the anchor position.
      *
      * @param parent the object node holding the annotation entry
      * @param entry the deferred annotation entry
@@ -343,8 +332,7 @@ public final class JsonTreeConverter {
         for (int i = 0; i < parent.getChildCount(); i++) {
             final EditNode child = parent.getChildAt(i);
             if (child instanceof EditNodeProperty fieldProp && target.equals(child.getName())) {
-                final String annotationName = AnnotationKeys.PREFIX + AnnotationKeys.annotationName(entry.getKey());
-                buildEditProperty(fieldProp, annotationName, entry, weightMonitor);
+                buildEditProperty(fieldProp, entry.getKey(), entry, weightMonitor);
                 return;
             }
         }
@@ -352,14 +340,12 @@ public final class JsonTreeConverter {
     }
 
     /**
-     * Builds an EditNode structure from a JSON node and adds it as a child to
-     * the parent property node. Handles different JSON node types (object,
-     * array, primitive values) appropriately.
+     * Builds an EditNode structure from a JSON node and adds it as a child to the parent property node. Handles
+     * different JSON node types (object, array, primitive values) appropriately.
      *
      * @param parent the parent EditNodeProperty to which the node will be added
      * @param jsonNode the JSON node to convert to an EditNode
-     * @param weightMonitor the EditTimes monitor for tracking tree construction
-     * metrics
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
      * @throws JsonParseException if JSON parsing fails during construction
      */
     private static void buildEditObject(EditNodeProperty parent, JsonNode jsonNode,

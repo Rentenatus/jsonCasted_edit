@@ -438,11 +438,13 @@ public class ClipboardManager {
             return false;
         }
 
+        // Orientation: every stash candidate must be able to become a child
+        // of the target node (paste into), not the other way round.
         for (EditNodeAbstract candidate : nodes) {
             if (candidate == null) {
                 continue;
             }
-            if (!targetData.canBeChildOf(candidate)) {
+            if (!candidate.canBeChildOf(targetData)) {
                 return false;
             }
         }

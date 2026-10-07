@@ -20,8 +20,8 @@ import org.testng.annotations.Test;
 public class EditTreeWriterNGTest {
 
     /**
-     * Field annotations flatten into their composite key right before their field, object annotations keep their
-     * simple key, and transient annotations disappear from the output when the declaration is loaded.
+     * Field annotations flatten into their composite key right before their field, object annotations keep their simple
+     * key, and transient annotations disappear from the output when the declaration is loaded.
      */
     @Test
     public void testCompositeFlatteningAndTransientFilter() throws Exception {
@@ -82,13 +82,12 @@ public class EditTreeWriterNGTest {
         final EditNodeObject root = (EditNodeObject) reloaded.getRoot();
         final EditNode comments = findChild(root, "comments");
         assertNotNull(comments, "The field reloads: " + json);
-        final EditNode doc = findChild(comments, "@doc");
+        final EditNode doc = findChild(comments, "@doc:comments");
         assertNotNull(doc, "The composite annotation anchors under its field again: " + json);
         assertEquals(doc.getChildCount(), 1, "The annotation row survives the roundtrip");
     }
 
     // ========== Helpers ==========
-
     /**
      * Builds a tree with a declared object annotation (hint), a transient object annotation (javadoc) and a field
      * annotation (doc on comments), bound against a fresh Config definition with exactly these declarations.
@@ -102,17 +101,17 @@ public class EditTreeWriterNGTest {
         final EditNodeObject root = new EditNodeObject("seedConfig");
         root.setCastName("de.jare.jsonconfig.item.ConfigRoot");
 
-        final EditNodeProperty hint = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        final EditNodeAnnotation hint = new EditNodeAnnotation("hint");
         root.addChild(hint, new EditTimes());
         hint.addChild(new EditNodeObject("declared object annotation"), new EditTimes());
 
-        final EditNodeProperty javadoc = new EditNodeProperty("@javadoc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation javadoc = new EditNodeAnnotation("javadoc");
         root.addChild(javadoc, new EditTimes());
         javadoc.addChild(new EditNodeObject("session-local note"), new EditTimes());
 
         final EditNodeProperty comments = new EditNodeProperty("comments", JsonNodeType.ARRAY);
         root.addChild(comments, new EditTimes());
-        final EditNodeProperty doc = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation doc = new EditNodeAnnotation("doc");
         comments.addChild(doc, new EditTimes());
         doc.addChild(new EditNodeObject("field annotation row"), new EditTimes());
         comments.addChild(new EditNodeObject("Das ist ein Json Config Datei."), new EditTimes());

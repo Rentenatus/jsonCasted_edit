@@ -12,27 +12,28 @@ import org.testng.annotations.Test;
 
 /**
  * Tests for the annotation binding of the on-the-fly parser (annotation concept, decisions 6 to 8): declared
- * annotations bind OKAY, undeclared ones are tolerated free annotations with a WARNING, composite keys
- * ({@code @doc:comments}) move under their field node through the parse cascade, and annotations survive the
- * deletion of their field - they stay anchored at the owning object and re-bind when the field appears again.
+ * annotations bind OKAY, undeclared ones are tolerated free annotations with a WARNING. The composite target is
+ * structural - anchored under a field the annotation is composite and binds against the field declaration, anchored
+ * under an object it is a simple object annotation. The annotation hangs at its structural parent: deleting the field
+ * removes the annotation with it, anchoring it under a matching field re-binds it.
  *
  * @author Janusch Rentenatus
  */
 public class AnnotationBindingNGTest {
 
     /**
-     * Declared object annotations bind OKAY, undeclared ones are tolerated free annotations with a WARNING,
-     * and the rows of an annotation adopt the implicit String element type.
+     * Declared object annotations bind OKAY, undeclared ones are tolerated free annotations with a WARNING, and the
+     * rows of an annotation adopt the implicit String element type.
      */
     @Test
     public void testDeclaredAndFreeObjectAnnotations() throws Exception {
         final EditNodeObject root = new EditNodeObject("seedConfig");
         root.setCastName("de.jare.jsonconfig.item.ConfigRoot");
-        final EditNodeProperty hintProp = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        final EditNodeAnnotation hintProp = new EditNodeAnnotation("hint");
         root.addChild(hintProp, new EditTimes());
         final EditNodeObject hintRow = new EditNodeObject("declared object annotation");
         hintProp.addChild(hintRow, new EditTimes());
-        final EditNodeProperty dokProp = new EditNodeProperty("@dok", JsonNodeType.ARRAY);
+        final EditNodeAnnotation dokProp = new EditNodeAnnotation("dok");
         root.addChild(dokProp, new EditTimes());
         final EditNodeObject dokRow = new EditNodeObject("free object annotation");
         dokProp.addChild(dokRow, new EditTimes());
@@ -52,48 +53,55 @@ public class AnnotationBindingNGTest {
     }
 
     /**
-     * A composite annotation key ({@code @doc:comments}) anchors at its target field: the parse cascade moves the
-     * annotation under the field node and binds it against the field's declared annotations.
+     * The composite target is structural: an annotation anchored under a field node shows its composite name, adopts
+     * the field as its target and binds against the field's declared annotations. Renaming edits the annotation name
+     * only - the kind and the target never change through a rename.
      */
     @Test
-    public void testCompositeAnnotationMovesUnderFieldNode() throws Exception {
+    public void testCompositeAnnotationAnchorsUnderFieldNode() throws Exception {
         final EditNodeObject root = new EditNodeObject("seedConfig");
         root.setCastName("de.jare.jsonconfig.item.ConfigRoot");
-        final EditNodeProperty orphan = new EditNodeProperty("@doc:comments", JsonNodeType.ARRAY);
-        root.addChild(orphan, new EditTimes());
-        final EditNodeObject docRow = new EditNodeObject("composite annotation row");
-        orphan.addChild(docRow, new EditTimes());
         final EditNodeProperty commentsProp = new EditNodeProperty("comments", JsonNodeType.ARRAY);
         root.addChild(commentsProp, new EditTimes());
         final EditNodeObject commentRow = new EditNodeObject("Das ist ein Json Config Datei.");
         commentsProp.addChild(commentRow, new EditTimes());
+        final EditNodeAnnotation docProp = new EditNodeAnnotation("doc");
+        commentsProp.addChild(docProp, new EditTimes());
+        final EditNodeObject docRow = new EditNodeObject("composite annotation row");
+        docProp.addChild(docRow, new EditTimes());
 
         final EditTree tree = new EditTree(root, new EditTimes());
         tree.setJsonModelDescriptor(newConfigRootDescriptor());
         waitForParser(tree);
 
-        assertEquals(orphan.getName(), "@doc",
-                "The composite anchor must be stripped after the move under the field node");
-        assertSame(orphan.getParent(), commentsProp,
-                "The annotation must be a child of its target field node (Kind von comments)");
-        assertEquals(orphan.getEditStatus(), EditStatus.OKAY,
-                "A declared field annotation must bind OKAY: " + orphan.getEditMessage());
+        assertEquals(docProp.getName(), "@doc:comments",
+                "Anchored under its field the annotation shows the composite key (what gets saved)");
+        assertTrue(docProp.isComposite(), "Anchored under a field the annotation is composite");
+        assertEquals(docProp.getTargetField(), "comments", "The target field is derived from the parent");
+        assertSame(docProp.getParent(), commentsProp,
+                "The annotation is a child of its target field node (Kind von comments)");
+        assertEquals(docProp.getEditStatus(), EditStatus.OKAY,
+                "A declared field annotation must bind OKAY: " + docProp.getEditMessage());
         assertEquals(commentRow.getEditStatus(), EditStatus.OKAY,
                 "The field's own rows must stay untouched: " + commentRow.getEditMessage());
+
+        docProp.setName("dok");
+        assertEquals(docProp.getName(), "@dok:comments",
+                "A rename edits the annotation name only, never kind or target");
+        assertEquals(docProp.getAnnotationName(), "dok");
     }
 
     /**
-     * Deleting the field never removes a persistent annotation: it falls back to the owning object with its
-     * composite anchor and a WARNING, and the parse cascade re-binds it as soon as a field of that name appears
-     * again.
+     * Deleting the field removes the annotation with it - it hangs at its structural parent, there is no rescue and no
+     * parallel anchor state. Anchoring the same detached annotation under a new matching field re-binds it immediately.
      */
     @Test
-    public void testFieldDeletionRescuesAndReappearanceRebinds() throws Exception {
+    public void testFieldDeletionRemovesTheAnnotationWithIt() throws Exception {
         final EditNodeObject root = new EditNodeObject("seedConfig");
         root.setCastName("de.jare.jsonconfig.item.ConfigRoot");
         final EditNodeProperty commentsProp = new EditNodeProperty("comments", JsonNodeType.ARRAY);
         root.addChild(commentsProp, new EditTimes());
-        final EditNodeProperty docProp = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation docProp = new EditNodeAnnotation("doc");
         commentsProp.addChild(docProp, new EditTimes());
         final EditNodeObject docRow = new EditNodeObject("annotation of the comments field");
         docProp.addChild(docRow, new EditTimes());
@@ -107,29 +115,39 @@ public class AnnotationBindingNGTest {
         assertTrue(tree.removeNode(commentsProp), "The comments node must be removable");
         waitForParser(tree);
 
-        assertEquals(docProp.getName(), "@doc:comments",
-                "The rescued annotation must carry its composite anchor again");
-        assertSame(docProp.getParent(), root,
-                "The rescued annotation must stay anchored at the owning object, never silently removed");
-        assertEquals(docProp.getEditStatus(), EditStatus.WARNING,
-                "The rescued annotation must fall back to a WARNING: " + docProp.getEditMessage());
+        assertSame(docProp.getParent(), commentsProp,
+                "The annotation stays with its field - the detached subtree keeps the structural anchor");
+        for (int i = 0; i < root.getChildCount(); i++) {
+            if (root.getChildAt(i) == docProp) {
+                fail("The annotation must not be rescued to the owning object");
+            }
+        }
 
         final EditNodeProperty newComments = (EditNodeProperty) tree.addNewChild(root, "comments",
                 root.getChildCount(), true);
         waitForParser(tree);
 
-        assertEquals(docProp.getName(), "@doc", "The re-bound annotation must use its plain annotation name");
+        for (int i = 0; i < root.getChildCount(); i++) {
+            if (root.getChildAt(i) == docProp) {
+                fail("A new field must not steal the detached annotation - anchoring is explicit");
+            }
+        }
+
+        tree.addChild(newComments, docProp);
+        waitForParser(tree);
+
+        assertEquals(docProp.getName(), "@doc:comments",
+                "Anchored under the new field the annotation is composite again");
         assertSame(docProp.getParent(), newComments,
-                "The re-appeared field must re-bind the waiting annotation under it");
+                "The annotation must be a child of the new field node");
         assertEquals(docProp.getEditStatus(), EditStatus.OKAY,
-                "The re-bound annotation must be OKAY again: " + docProp.getEditMessage());
+                "The structurally re-bound annotation must be OKAY again: " + docProp.getEditMessage());
     }
 
-
     /**
-     * The * miniregex for composite targets: a pure wildcard declaration (doc:*) covers every field of the type and
-     * the object level, a prefix pattern covers only matching fields, an explicit field declaration wins, and
-     * undeclared names stay tolerated warnings.
+     * The * miniregex for declarations: a pure wildcard declaration (doc:*) covers every field of the type and the
+     * object level, a prefix pattern covers only matching fields, an explicit field declaration wins, and undeclared
+     * names stay tolerated warnings.
      */
     @Test
     public void testWildcardDeclarationCoversFields() throws Exception {
@@ -142,21 +160,21 @@ public class AnnotationBindingNGTest {
 
         final EditNodeProperty comments = new EditNodeProperty("comments", JsonNodeType.ARRAY);
         root.addChild(comments, new EditTimes());
-        final EditNodeProperty docOnComments = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation docOnComments = new EditNodeAnnotation("doc");
         comments.addChild(docOnComments, new EditTimes());
-        final EditNodeProperty hintOnComments = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        final EditNodeAnnotation hintOnComments = new EditNodeAnnotation("hint");
         comments.addChild(hintOnComments, new EditTimes());
 
         final EditNodeProperty profiles = new EditNodeProperty("profiles", JsonNodeType.ARRAY);
         root.addChild(profiles, new EditTimes());
-        final EditNodeProperty docOnProfiles = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation docOnProfiles = new EditNodeAnnotation("doc");
         profiles.addChild(docOnProfiles, new EditTimes());
-        final EditNodeProperty hintOnProfiles = new EditNodeProperty("@hint", JsonNodeType.ARRAY);
+        final EditNodeAnnotation hintOnProfiles = new EditNodeAnnotation("hint");
         profiles.addChild(hintOnProfiles, new EditTimes());
 
-        final EditNodeProperty docType = new EditNodeProperty("@doc", JsonNodeType.ARRAY);
+        final EditNodeAnnotation docType = new EditNodeAnnotation("doc");
         root.addChild(docType, new EditTimes());
-        final EditNodeProperty dokType = new EditNodeProperty("@dok", JsonNodeType.ARRAY);
+        final EditNodeAnnotation dokType = new EditNodeAnnotation("dok");
         root.addChild(dokType, new EditTimes());
 
         final EditTree tree = new EditTree(root, new EditTimes());
@@ -178,11 +196,10 @@ public class AnnotationBindingNGTest {
     }
 
     // ========== Helpers ==========
-
     /**
-     * Builds a fresh Config definition with the annotations declared for the binding matrix: {@code hint} on the
-     * root type and {@code doc} on the comments field. A fresh instance keeps the test independent of the cached
-     * descriptor of the shared singleton.
+     * Builds a fresh Config definition with the annotations declared for the binding matrix: {@code hint} on the root
+     * type and {@code doc} on the comments field. A fresh instance keeps the test independent of the cached descriptor
+     * of the shared singleton.
      *
      * @return the model descriptor of the fresh definition
      */
