@@ -28,9 +28,9 @@ ComboBox disabled und zeigt "without semantics".
 | Modi, Ablage pro Baum, Combo am resourceLabel | implementiert |
 | Parser schläft ohne Modell / bei WITHOUT | implementiert |
 | Eintrittsregel Hard (Baum muss gruen sein) | implementiert |
-| Harte Menuestruktur (Untermenüs je Knotenart) | offen (Abschnitt 4) |
+| Harte Menuestruktur (Untermenüs je Knotenart) | implementiert (Advisor, Popup, Hauptmenue) |
 | Synchron-Regel inkl. Propagations-Bug | offen (Abschnitt 5) |
-| Bruch-Dialog | offen (Abschnitt 6) |
+| Bruch-Dialog | fuer Paste implementiert (Dry-Run-Orakel, 6.4-6.6), allgemein offen |
 | Wert-/Namensbearbeitung im Hard-Modus | offen (Abschnitt 7) |
 
 ## 1. Modi und Ablage
@@ -182,6 +182,32 @@ die das Modell nicht hergibt), erscheint:
 
 Der User kann also immer abbrechen - es entsteht nie ein Zustand, den er
 nicht gewollt hat.
+### 6.4 Paste-Dry-Run: der Parser als Orakel (Hard-Modus)
+
+Paste ist die Aktion mit dem hoechsten Bruch-Risiko, weil der Stash global
+ueber alle Baeume existiert und Fremdinhalte tragen kann. Statt einer
+parallelen Pruef-Logik ist der Parser selbst das Orakel: der Stash-Inhalt
+wird geklont, der Klon bleibt **in der Luft** (Parent- und Baum-Referenz
+des Ankers, ohne Andocken, ohne Benachrichtigung) und wird synchron gegen
+den Anker geparst. Die Bindungswege entscheiden wie im echten Baum -
+Feld, Elementtyp, Interface-Cast, Annotation, Wildcards -: der Klon wird
+als ganzer Teilbaum in Pre-Order geparst (Eltern zuerst), auch Knoten,
+die die Propagierung ueberspringt (explizite Casts). Dazu zwei billige
+Vorpruefungen an Nahtstellen, die der Luft-Parse nicht sieht: die
+Struktur (Knotenart passt, 0:1 nicht doppelt) und die Wurzel-Kompatib-
+ilitaet von Wert-Objekten zum Anker-Feld (contains-Regel der Propa-
+gierung; castlos heisst: das echte Paste adoptiert den Feldtyp).
+
+- Alles OKAY -> das regulaere Paste-Kommando dockt an; sein synchroner
+  Parse bestaetigt deterministisch (idempotent), Undo/Redo/Selektion
+  laufen wie immer. Der Klon war nur die Sonde.
+- Nicht OKAY -> Bruch-Dialog (6.2) mit der ersten Fehlermeldung des
+  Klons; Cancel verwirft die Sonde spurlos - der Baum war nie beruehrt,
+  der harte Zustand blieb durchgehend gruen.
+
+Das funktioniert nur im Hard-Modus, weil nur dort das Parsen synchron
+genug ist. Im Soft-Modus bleibt Paste blind und tolerant wie gehabt.
+
 
 ### 6.3 Pruefpunkt: vor oder nach der Ausführung
 
@@ -199,6 +225,47 @@ Wechsel an; **Cancel haelt den Hard-Modus fest und friert ihn ein** - alle
 Aktionen sind grau, bis die Probleme behoben sind (dann wieder frei) oder der
 User doch auf Soft wechselt. Ein Zurueckrollen gibt es hier nicht, weil kein
 auslösender Edit existiert.
+
+
+### 6.5 Das Paste-Modell im Ueberblick
+
+Der Stash ist **global ueber alle Baeume** - entscheidend ist der
+Deskriptor des **Ziels**, nie der der Quelle. Die Modell-Relevanz je
+Kandidat und Ziel:
+
+| Kandidat -> Ziel | Struktur prueft | Modell muss pruefen |
+|---|---|---|
+| Property -> Objekt | Knotenart | Feld deklariert, noch nicht vorhanden, Struktur-Art passt |
+| Annotation -> Objekt/Feld | Knotenart | deklariert am Anker, noch nicht vorhanden |
+| Objekt-Zeile -> Array-Feld | Knotenart | Cast contains-kompatibel zum Elementtyp |
+| Objekt-Wert -> 0:1-Feld | Knotenart | unbesetzt, Cast kompatibel |
+| Zeile -> Annotation | Knotenart | immer ok (implizit String) |
+
+Arbeitsteilung der Pruefungen (die Antwort auf das Selektions-Dilemma):
+
+- **Enablement (Selektionszeit):** nur die billige Strukturpruefung
+  (`canBeChildTo`-Welt). Selektion bleibt billig, das Menue ist nie
+  wartungsarm falsch.
+- **Klick:** der teure Orakel-Lauf (6.4) entscheidet mit dem echten
+  Parser ueber den ganzen Klon, inklusive Tiefe.
+- **Cut ist Move:** dieselbe Probe, dieselbe Entscheidung; die
+  ID-Wiederverwendung des echten Paste-Kommandos bleibt unberuehrt.
+
+### 6.6 Offene Punkte des Paste-Orakels
+
+1. **Duplikate:** die Probe prueft Namen nicht - ein zweites
+   `comments`-Feld oder ein zweites `@hint` am selben Anker parst gruen
+   und wuerde andocken, obwohl der Hard-Modus "Feld existiert genau
+   einmal" verspricht. Loesung: die Struktur-Vorpruefung der Probe um
+   Namens-Duplikate am Anker erweitern (billig, im Klick). Bis dahin
+   kann der harte Zustand ein Duplikat enthalten.
+2. **Multi-Select-Copy-Sperre:** `mixedNodeTypes` lehnt Annotation +
+   Feld zusammen ab. Mit der Kandidaten-Pruefung der Probe ist die
+   Sperre nicht mehr noetig - Feld mitsamt Annotation kopieren ist die
+   natuerlichste Operation. Entfernen, sobald 1. steht.
+3. **Bruch-Dialog allgemein:** das Orakel deckt Paste ab; die restlichen
+   Aktionen (Delete auf Pflichtfelder, Rename, externe Bruche) warten auf
+   Schritt 3 des Umsetzungsplans.
 
 ## 7. Wert- und Namensbearbeitung im Hard-Modus (offen)
 

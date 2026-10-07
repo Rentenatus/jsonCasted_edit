@@ -856,6 +856,34 @@ public class EditTree {
     }
 
     /**
+     * Parses a detached subtree synchronously against this tree (hard parse dry run): the caller has wired the
+     * parent and tree references of the detached root and its subtree, the parse runs like any hard parse but
+     * without tree membership - nothing is docked, no notification fires, the tree itself stays untouched.
+     *
+     * @param detachedRoot the root of the detached subtree to parse
+     */
+    void parseDetached(EditNodeAbstract detachedRoot) {
+        if (detachedRoot == null) {
+            return;
+        }
+        ensureParserService();
+        // Pre-order walk of the whole clone: parents first, so the children
+        // resolve against the settled parent type. Nodes the propagation
+        // skips (explicit casts) get their parse here too.
+        parseDetachedSubtree(detachedRoot);
+        drainParseQueue();
+    }
+
+    private void parseDetachedSubtree(EditNodeAbstract node) {
+        parserService.parseNodeSafely(node);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof EditNodeAbstract child) {
+                parseDetachedSubtree(child);
+            }
+        }
+    }
+
+    /**
      * Processes the parse queue synchronously until it is empty. Cascades (nodes re-queued during parsing) are handled
      * by the loop; the hash-based skip in the parser bounds the number of passes.
      */
