@@ -22,23 +22,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Service class for on-the-fly type parsing of EditTree nodes.Implements
- TypeParserListener to receive notifications about node changes.<p>
- * This service uses a single parse worker to process nodes from the parse
- * queue, performing type assignment based on the
- * {@link de.jare.jsoncasted.model.descriptor.JsonModelDescriptor} from the
- * tree. It is designed to be thread-safe and non-blocking for the UI.
+ * Service class for on-the-fly type parsing of EditTree nodes.Implements TypeParserListener to receive notifications
+ * about node changes.<p>
+ * This service uses a single parse worker to process nodes from the parse queue, performing type assignment based on
+ * the {@link de.jare.jsoncasted.model.descriptor.JsonModelDescriptor} from the tree. It is designed to be thread-safe
+ * and non-blocking for the UI.
  * </p>
  *
  * <p>
  * The service:
  * <ul>
- * <li>Implements {@link TypeParserListener} to receive change
- * notifications</li>
- * <li>Uses a single parse worker: parse runs are serialized, one node at a
- * time. Parallel parsing bought nothing but races on shared state; the
- * single worker acts as the parse permit with an inherent finally
- * guarantee - a second parse can never overlap an in-flight one.</li>
+ * <li>Implements {@link TypeParserListener} to receive change notifications</li>
+ * <li>Uses a single parse worker: parse runs are serialized, one node at a time. Parallel parsing bought nothing but
+ * races on shared state; the single worker acts as the parse permit with an inherent finally guarantee - a second parse
+ * can never overlap an in-flight one.</li>
  * <li>Takes nodes from the parse queue ({@link EditTree#getParseQueue()})</li>
  * <li>Uses the tree's JsonModelDescriptor for type inference</li>
  * <li>Updates ParseState on nodes (EDITED -> PENDING -> DONE)</li>
@@ -48,8 +45,8 @@ import java.util.logging.Logger;
  * </p>
  *
  * <p>
- * <strong>Thread Safety:</strong> This class uses an ExecutorService with a
- * fixed thread pool and coordinates with thread-safe collections from EditTree.
+ * <strong>Thread Safety:</strong> This class uses an ExecutorService with a fixed thread pool and coordinates with
+ * thread-safe collections from EditTree.
  * </p>
  *
  * @author Janusch Rentenatus
@@ -59,10 +56,9 @@ public class TypeParserService implements TypeParserListener {
     private static final Logger LOGGER = Logger.getLogger(TypeParserService.class.getName());
 
     /**
-     * Default number of threads in the parser worker pool. One worker
-     * serializes the parse runs: while a node is being parsed, no second
-     * parse can start, which removes the races on shared state (node states,
-     * field map, requeue cascades) by concept instead of by lock.
+     * Default number of threads in the parser worker pool. One worker serializes the parse runs: while a node is being
+     * parsed, no second parse can start, which removes the races on shared state (node states, field map, requeue
+     * cascades) by concept instead of by lock.
      */
     public static final int DEFAULT_THREAD_POOL_SIZE = 1;
 
@@ -97,8 +93,7 @@ public class TypeParserService implements TypeParserListener {
     private final int threadPoolSize;
 
     /**
-     * Creates a new TypeParserService for the specified EditTree with default
-     * thread pool size.
+     * Creates a new TypeParserService for the specified EditTree with default thread pool size.
      *
      * @param editTree the tree to parse (must not be null)
      * @throws IllegalArgumentException if editTree is null
@@ -108,13 +103,11 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Creates a new TypeParserService for the specified EditTree with custom
-     * thread pool size.
+     * Creates a new TypeParserService for the specified EditTree with custom thread pool size.
      *
      * @param editTree the tree to parse (must not be null)
      * @param threadPoolSize number of threads in the pool (must be at least 1)
-     * @throws IllegalArgumentException if editTree is null or threadPoolSize <
-     * 1
+     * @throws IllegalArgumentException if editTree is null or threadPoolSize < 1
      */
     public TypeParserService(EditTree editTree, int threadPoolSize) {
         if (editTree == null) {
@@ -128,9 +121,8 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Starts the parser service with a fixed thread pool. Also registers this
-     * service as the listener with the EditTree. Each node from the queue will
-     * be processed by a thread from the pool.
+     * Starts the parser service with a fixed thread pool. Also registers this service as the listener with the
+     * EditTree. Each node from the queue will be processed by a thread from the pool.
      */
     public void start() {
         if (running.getAndSet(true)) {
@@ -158,8 +150,7 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Stops the parser service gracefully. Waits for all running parse tasks to
-     * complete.
+     * Stops the parser service gracefully. Waits for all running parse tasks to complete.
      */
     public void stop() {
         if (!running.getAndSet(false)) {
@@ -224,8 +215,7 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * The queue processor loop. Continuously polls the queue and submits nodes
-     * to the thread pool for parsing.
+     * The queue processor loop. Continuously polls the queue and submits nodes to the thread pool for parsing.
      */
     private void processQueue() {
         while (running.get() || !editTree.getParseQueue().isEmpty()) {
@@ -278,10 +268,9 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Safely parses a single node with error handling. This method wraps the
-     * actual parseNode call to prevent exceptions from propagating to the
-     * caller. Used by the queue worker and by EditTree for synchronous
-     * parsing in HARD_PARSE mode.
+     * Safely parses a single node with error handling. This method wraps the actual parseNode call to prevent
+     * exceptions from propagating to the caller. Used by the queue worker and by EditTree for synchronous parsing in
+     * HARD_PARSE mode.
      *
      * @param node the node to parse
      */
@@ -309,11 +298,10 @@ public class TypeParserService implements TypeParserListener {
      * Parses a single node and updates its type information.
      *
      * <p>
-     * This method implements Phase 6 of the on-the-fly parser: 1. Checks if
-     * node still needs parsing (hash comparison) 2. Uses JsonModelDescriptor to
-     * assign types via tryAssignType() 3. Handles parent type inference for
-     * EditNodeObject nodes 4. Sets EditStatus based on parsing results 5.
-     * Triggers re-parsing of affected nodes (children when parent type changes)
+     * This method implements Phase 6 of the on-the-fly parser: 1. Checks if node still needs parsing (hash comparison)
+     * 2. Uses JsonModelDescriptor to assign types via tryAssignType() 3. Handles parent type inference for
+     * EditNodeObject nodes 4. Sets EditStatus based on parsing results 5. Triggers re-parsing of affected nodes
+     * (children when parent type changes)
      * </p>
      *
      * @param node the node to parse
@@ -460,8 +448,8 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Re-queues all children of the given node for re-parsing. Marks each child
-     * as EDITED and adds it to the parse queue.
+     * Re-queues all children of the given node for re-parsing. Marks each child as EDITED and adds it to the parse
+     * queue.
      *
      * @param parent the parent whose children need re-parsing
      */
@@ -476,8 +464,8 @@ public class TypeParserService implements TypeParserListener {
 
     /**
      * Checks whether the node carries no explicit cast decision of its own: no type at all, or a cast that is still
-     * identical to the node name (the anonymous converter naming). Only such nodes are candidates for type
-     * inference - a propagated or manually set cast is an explicit decision.
+     * identical to the node name (the anonymous converter naming). Only such nodes are candidates for type inference -
+     * a propagated or manually set cast is an explicit decision.
      *
      * @param node the object node to check
      * @return true if the node has no explicit cast decision
@@ -490,11 +478,9 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Checks whether the node carries an inherited cast whose type is an
-     * interface with implementors. Such a cast is only the approximate
-     * answer: the field set inference may refine it to a concrete
-     * implementor, while the inherited interface type remains the fallback
-     * when no unique candidate exists.
+     * Checks whether the node carries an inherited cast whose type is an interface with implementors. Such a cast is
+     * only the approximate answer: the field set inference may refine it to a concrete implementor, while the inherited
+     * interface type remains the fallback when no unique candidate exists.
      *
      * @param node the object node to check
      * @return true if the cast is inherited and the type is an interface
@@ -506,11 +492,10 @@ public class TypeParserService implements TypeParserListener {
 
     /**
      * Attempts to infer the type of an untyped EditNodeObject from the field names of its property children. The
-     * candidates are the types declaring ALL of these fields (set coverage); if exactly one type covers the whole
-     * set, it is assigned, the node is re-queued for a clean parse and its children are re-queued so their fields
-     * resolve against the inferred type. This replaces the former single-name parent inference: a field set is far
-     * more selective than one field name, so combinations like level+path resolve even when each name alone is
-     * ambiguous.
+     * candidates are the types declaring ALL of these fields (set coverage); if exactly one type covers the whole set,
+     * it is assigned, the node is re-queued for a clean parse and its children are re-queued so their fields resolve
+     * against the inferred type. This replaces the former single-name parent inference: a field set is far more
+     * selective than one field name, so combinations like level+path resolve even when each name alone is ambiguous.
      *
      * @param node the untyped EditNodeObject whose type should be inferred
      * @param model the JsonModelDescriptor to use for type lookups
@@ -525,12 +510,12 @@ public class TypeParserService implements TypeParserListener {
         final List<String> fieldNames = new ArrayList<>();
         for (int i = 0; i < node.getChildCount(); i++) {
             final EditNode child = node.getChildAt(i);
-            if (child instanceof EditNodeProperty) {
+            // Annotations are no fields: they must not pollute the field
+            // set the inference is built on.
+            if (child instanceof EditNodeProperty
+                    && !(child instanceof EditNodeAnnotation)) {
                 final String fieldName = child.getName();
-                // Annotations are no fields: they must not pollute the field
-                // set the inference is built on.
-                if (fieldName != null && !fieldName.isEmpty()
-                        && !AnnotationKeys.isAnnotationKey(fieldName)) {
+                if (fieldName != null && !fieldName.isEmpty()) {
                     fieldNames.add(fieldName);
                 }
             }
@@ -646,8 +631,7 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Helper method to add a node to the parse queue with proper state
-     * management.
+     * Helper method to add a node to the parse queue with proper state management.
      *
      * @param node the node to add to the parse queue
      */
@@ -665,8 +649,8 @@ public class TypeParserService implements TypeParserListener {
 
     // ========== Public API for manual triggering ==========
     /**
-     * Triggers re-parsing for a node and its subtree if needed. This method can
-     * be called from the UI thread to request parsing.
+     * Triggers re-parsing for a node and its subtree if needed. This method can be called from the UI thread to request
+     * parsing.
      *
      * @param node the node to re-parse
      */
@@ -675,8 +659,7 @@ public class TypeParserService implements TypeParserListener {
     }
 
     /**
-     * Triggers parsing for the entire tree. Marks all nodes as EDITED and adds
-     * all nodes to the queue.
+     * Triggers parsing for the entire tree. Marks all nodes as EDITED and adds all nodes to the queue.
      */
     public void requestFullParse() {
         if (editTree == null) {

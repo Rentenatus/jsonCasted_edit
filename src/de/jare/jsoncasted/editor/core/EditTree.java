@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Represents the editable tree structure for JSON data. Maintains a hierarchy
- * of EditNode instances and provides fast lookup by ID.
+ * Represents the editable tree structure for JSON data. Maintains a hierarchy of EditNode instances and provides fast
+ * lookup by ID.
  *
  * @author Janusch Rentenatus
  */
@@ -42,9 +42,8 @@ public class EditTree {
     private final Set<EditNodeAbstract> pendingNodes = ConcurrentHashMap.newKeySet();
 
     /**
-     * Creates a new EditTree with a root node containing the specified text.
-     * The root node is initialized as an EditNodeObject with the given text,
-     * and the tree is ready to be manipulated with various edit commands.
+     * Creates a new EditTree with a root node containing the specified text. The root node is initialized as an
+     * EditNodeObject with the given text, and the tree is ready to be manipulated with various edit commands.
      *
      * @param rootText the text to be contained in the root node of the tree
      */
@@ -53,13 +52,12 @@ public class EditTree {
     }
 
     /**
-     * Creates a new EditTree with the specified root node. The provided root
-     * node becomes the top-level node of the tree, and all subsequent nodes
-     * added to the tree will be organized under this root. This constructor
-     * allows for initializing the tree with a pre-defined structure if desired.
+     * Creates a new EditTree with the specified root node. The provided root node becomes the top-level node of the
+     * tree, and all subsequent nodes added to the tree will be organized under this root. This constructor allows for
+     * initializing the tree with a pre-defined structure if desired.
      *
-     * @param root the root node of the tree, which must not be null and will
-     * serve as the base for all other nodes in the tree
+     * @param root the root node of the tree, which must not be null and will serve as the base for all other nodes in
+     * the tree
      */
     EditTree(EditNodeAbstract root, EditTimes weightMonitor) {
         this.root = root;
@@ -78,9 +76,8 @@ public class EditTree {
     }
 
     /**
-     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des übergebenen
-     * Knotens. Wird im Konstruktor aufgerufen, um sicherzustellen, dass jeder
-     * Knoten im Baum seine EditTree-Referenz kennt.
+     * Propagiert die Tree-Referenz rekursiv auf alle Nachfahren des übergebenen Knotens. Wird im Konstruktor
+     * aufgerufen, um sicherzustellen, dass jeder Knoten im Baum seine EditTree-Referenz kennt.
      *
      * @param node der Startknoten
      */
@@ -98,8 +95,7 @@ public class EditTree {
     }
 
     /**
-     * Initialisiert den ParseState für alle Knoten im Baum auf NONE. Wird beim
-     * Erstellen des Baums aufgerufen.
+     * Initialisiert den ParseState für alle Knoten im Baum auf NONE. Wird beim Erstellen des Baums aufgerufen.
      *
      * @param node der Startknoten (normalerweise root)
      */
@@ -117,11 +113,10 @@ public class EditTree {
     }
 
     /**
-     * Returns the root node of the tree. The root node is the top-level node
-     * from which all other nodes in the tree descend. It serves as the entry
-     * point for traversing and manipulating the tree structure. This method
-     * allows access to the root node for operations such as adding child nodes,
-     * searching for nodes, and performing edits on the tree.
+     * Returns the root node of the tree. The root node is the top-level node from which all other nodes in the tree
+     * descend. It serves as the entry point for traversing and manipulating the tree structure. This method allows
+     * access to the root node for operations such as adding child nodes, searching for nodes, and performing edits on
+     * the tree.
      *
      *
      * @return the root node of the tree
@@ -132,15 +127,13 @@ public class EditTree {
     }
 
     /**
-     * Finds a node in the tree based on the provided reference node. This
-     * method uses the edit ID (and by interval labeling left range, and times
-     * range) of the reference node to locate the corresponding node in the
-     * tree.
+     * Finds a node in the tree based on the provided reference node. This method uses the edit ID (and by interval
+     * labeling left range, and times range) of the reference node to locate the corresponding node in the tree.
      *
-     * @param referenz the reference node containing the edit ID, (and by
-     * interval labeling left range, and times range) to search for in the tree
-     * @return the node in the tree that matches the criteria specified by the
-     * reference node, or null if no such node is found
+     * @param referenz the reference node containing the edit ID, (and by interval labeling left range, and times range)
+     * to search for in the tree
+     * @return the node in the tree that matches the criteria specified by the reference node, or null if no such node
+     * is found
      */
     public EditNodeAbstract findNodeByIdAndRange(EditNode referenz) {
         return findNodeByIdAndRange(referenz.getEditId(), referenz.getLeftRange(), referenz.getTimesRange(),
@@ -148,72 +141,65 @@ public class EditTree {
     }
 
     /**
-     * Finds a node in the tree based on the provided abstract entry. This
-     * method uses the node ID (and by interval labeling left range, and times
-     * range) of the abstract entry to locate the corresponding node in the
-     * tree.
+     * Finds a node in the tree based on the provided abstract entry. This method uses the node ID (and by interval
+     * labeling left range, and times range) of the abstract entry to locate the corresponding node in the tree.
      *
      * Start is the root node.
      *
-     * @param entry the abstract entry containing the node ID, (and by interval
-     * labeling left range, and times range) to search for in the tree
-     * @return the node in the tree that matches the criteria specified by the
-     * abstract entry, or null if no such node is found
+     * @param entry the abstract entry containing the node ID, (and by interval labeling left range, and times range) to
+     * search for in the tree
+     * @return the node in the tree that matches the criteria specified by the abstract entry, or null if no such node
+     * is found
      */
     public EditNodeAbstract findNodeByIdAndRange(SimpleEntry entry) {
         return findNodeByIdAndRange(entry.nodeId, entry.leftRange, entry.timesRange, root, true);
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, left range, and
-     * times range. This method uses the node ID (and by interval labeling left
-     * range, and times range) of the abstract entry to locate the corresponding
-     * node in the tree.
+     * Finds a node in the tree based on the provided node ID, left range, and times range. This method uses the node ID
+     * (and by interval labeling left range, and times range) of the abstract entry to locate the corresponding node in
+     * the tree.
      *
      * Start is the root node.
      *
      * @param id the ID of the node to search for
      * @param left the left range of the node to search for
      * @param times the times range of the node to search for
-     * @return the node in the tree that matches the criteria specified by the
-     * parameters, or null if no such node is found
+     * @return the node in the tree that matches the criteria specified by the parameters, or null if no such node is
+     * found
      */
     public EditNodeAbstract findNodeByIdAndRange(long id, long left, long times) {
         return findNodeByIdAndRange(id, left, times, root, true);
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, left range, and
-     * times range, with an option for fallback. This method uses the node ID
-     * (and by interval labeling left range, and times range) of the abstract
-     * entry to locate the corresponding node in the tree.
+     * Finds a node in the tree based on the provided node ID, left range, and times range, with an option for fallback.
+     * This method uses the node ID (and by interval labeling left range, and times range) of the abstract entry to
+     * locate the corresponding node in the tree.
      *
      * @param id the ID of the node to search for
      * @param left the left range of the node by interval labeling to search for
-     * @param times the times range of the node by interval labeling to search
-     * for
+     * @param times the times range of the node by interval labeling to search for
      * @param fallback whether to use fallback mechanism
-     * @return the node in the tree that matches the criteria specified by the
-     * parameters, or null if no such node is found
+     * @return the node in the tree that matches the criteria specified by the parameters, or null if no such node is
+     * found
      */
     public EditNodeAbstract findNodeByIdAndRange(long id, long left, long times, boolean fallback) {
         return findNodeByIdAndRange(id, left, times, root, fallback);
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, left range, and
-     * times range, with an option for fallback. This method uses the node ID
-     * (and by interval labeling left range, and times range) of the abstract
-     * entry to locate the corresponding node in the tree.
+     * Finds a node in the tree based on the provided node ID, left range, and times range, with an option for fallback.
+     * This method uses the node ID (and by interval labeling left range, and times range) of the abstract entry to
+     * locate the corresponding node in the tree.
      *
      * @param id the ID of the node to search for
      * @param left the left range of the node by interval labeling to search for
-     * @param times the times range of the node by interval labeling to search
-     * for
+     * @param times the times range of the node by interval labeling to search for
      * @param startNode the node to start the search from
      * @param fallback whether to use fallback mechanism
-     * @return the node in the tree that matches the criteria specified by the
-     * parameters, or null if no such node is found
+     * @return the node in the tree that matches the criteria specified by the parameters, or null if no such node is
+     * found
      */
     public EditNodeAbstract findNodeByIdAndRange(long id, long left, long times, EditNodeAbstract startNode, boolean fallback) {
         EditNodeAbstract ret = findNodeByIdAndRange(id, left, times, startNode);
@@ -224,19 +210,15 @@ public class EditTree {
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, left range, and
-     * times range, starting from a specified node. This method performs a
-     * search through the tree structure beginning at the given start node to
-     * find a node that matches the specified criteria. The search checks if the
-     * current node matches the ID, and if not, it iterates through the children
-     * of the current node to find a match based on the left range and times
-     * range. If a matching node is found, it is returned; otherwise, the method
-     * returns null.
+     * Finds a node in the tree based on the provided node ID, left range, and times range, starting from a specified
+     * node. This method performs a search through the tree structure beginning at the given start node to find a node
+     * that matches the specified criteria. The search checks if the current node matches the ID, and if not, it
+     * iterates through the children of the current node to find a match based on the left range and times range. If a
+     * matching node is found, it is returned; otherwise, the method returns null.
      *
      * @param id the ID of the node to search for
      * @param left the left range of the node by interval labeling to search for
-     * @param times the times range of the node by interval labeling to search
-     * for
+     * @param times the times range of the node by interval labeling to search for
      * @param startNode the node to start the search from
      * @return
      */
@@ -283,38 +265,31 @@ public class EditTree {
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, starting from a
-     * specified node.
+     * Finds a node in the tree based on the provided node ID, starting from a specified node.
      *
-     * It dont using interval labeling, so it is not as efficient as
-     * findNodeByIdAndRange.
+     * It dont using interval labeling, so it is not as efficient as findNodeByIdAndRange.
      *
      * Start is the root node.
      *
      * @param id the ID of the node to search for
-     * @return the node in the tree that matches the specified ID, or null if no
-     * such node is found
+     * @return the node in the tree that matches the specified ID, or null if no such node is found
      */
     public EditNodeAbstract findNodeById(long id) {
         return findNodeById(id, root);
     }
 
     /**
-     * Finds a node in the tree based on the provided node ID, starting from a
-     * specified node. This method performs a search through the tree structure
-     * beginning at the given start node to find a node that matches the
-     * specified ID. The search checks if the current node matches the ID, and
-     * if not, it iterates through the children of the current node to find a
-     * match based on the ID alone. If a matching node is found, it is returned;
-     * otherwise, the method returns null.
+     * Finds a node in the tree based on the provided node ID, starting from a specified node. This method performs a
+     * search through the tree structure beginning at the given start node to find a node that matches the specified ID.
+     * The search checks if the current node matches the ID, and if not, it iterates through the children of the current
+     * node to find a match based on the ID alone. If a matching node is found, it is returned; otherwise, the method
+     * returns null.
      *
-     * It dont using interval labeling, so it is not as efficient as
-     * findNodeByIdAndRange.
+     * It dont using interval labeling, so it is not as efficient as findNodeByIdAndRange.
      *
      * @param id the ID of the node to search for
      * @param startNode the node to start the search from
-     * @return the node in the tree that matches the specified ID, or null if no
-     * such node is found
+     * @return the node in the tree that matches the specified ID, or null if no such node is found
      */
     public EditNodeAbstract findNodeById(long id, EditNodeAbstract startNode) {
         if (startNode == null) {
@@ -350,8 +325,7 @@ public class EditTree {
      *
      * @param start the node to start the search from
      * @param search the node to search for within the tree
-     * @return true if the tree contains a node with the specified ID, false
-     * otherwise
+     * @return true if the tree contains a node with the specified ID, false otherwise
      */
     public boolean hasNodeStarting(EditNodeAbstract start, EditNode search) {
         if (start == null) {
@@ -363,8 +337,7 @@ public class EditTree {
     /**
      * Checks if the tree contains a node with the specified ID.
      *
-     * It dont using interval labeling, so it is not as efficient as
-     * findNodeByIdAndRange.
+     * It dont using interval labeling, so it is not as efficient as findNodeByIdAndRange.
      *
      * @param id the ID of the node to check for in the tree
      * @return
@@ -376,8 +349,7 @@ public class EditTree {
     /**
      * Adds a new node to the tree under the specified parent node.
      *
-     * @param parentNode the parent node under which the new node should be
-     * added
+     * @param parentNode the parent node under which the new node should be added
      * @param template the template of new node to be added to the tree
      * @param regenerateEditId
      * @return true if the node was added successfully, false otherwise
@@ -387,14 +359,12 @@ public class EditTree {
     }
 
     /**
-     * Adds a new node to the tree under the specified parent node at a given
-     * index.
+     * Adds a new node to the tree under the specified parent node at a given index.
      *
-     * @param parentNode the parent node under which the new node should be
-     * added
+     * @param parentNode the parent node under which the new node should be added
      * @param template the template of new node to be added to the tree
-     * @param index the index at which the new node should be inserted under the
-     * parent node, or -1 to append to the end of the children list
+     * @param index the index at which the new node should be inserted under the parent node, or -1 to append to the end
+     * of the children list
      * @param regenerateEditId
      * @return newNode if the node was added successfully
      */
@@ -421,11 +391,10 @@ public class EditTree {
     }
 
     /**
-     * Adds a new child node to the specified parent node.This method takes the
-     * parent node and the text for the new child node as parameters.
+     * Adds a new child node to the specified parent node.This method takes the parent node and the text for the new
+     * child node as parameters.
      *
-     * @param parentNode the parent node under which the new child node should
-     * be added
+     * @param parentNode the parent node under which the new child node should be added
      * @param nodeText the text to be contained in the new child node
      * @param asArray
      * @return the newly created child node that was added to the tree
@@ -446,15 +415,13 @@ public class EditTree {
     }
 
     /**
-     * Adds a new child node to the specified parent node at a given index.This
-     * method takes the parent node, the text for the new child node, and the
-     * index at which the new child node should be inserted as parameters.
+     * Adds a new child node to the specified parent node at a given index.This method takes the parent node, the text
+     * for the new child node, and the index at which the new child node should be inserted as parameters.
      *
-     * @param parentNode the parent node under which the new child node should
-     * be added
+     * @param parentNode the parent node under which the new child node should be added
      * @param nodeText the text to be contained in the new child node
-     * @param index the index at which the new child node should be inserted
-     * under the parent node, or -1 to append to the end of the children list
+     * @param index the index at which the new child node should be inserted under the parent node, or -1 to append to
+     * the end of the children list
      * @param asArray
      * @return the newly created child node that was added to the tree
      */
@@ -474,18 +441,14 @@ public class EditTree {
     }
 
     /**
-     * Checks the properties of the parent node to ensure it is valid for adding
-     * a child node. This method verifies that the parent node is not null and
-     * that it is part of the tree structure. If the parent node is null, it
-     * throws an IllegalArgumentException. If the parent node is not part of the
-     * tree, it also throws an IllegalArgumentException. This method is used as
-     * a precondition check before adding a child node to ensure that the
-     * operation is performed on a valid parent node within the tree.
+     * Checks the properties of the parent node to ensure it is valid for adding a child node. This method verifies that
+     * the parent node is not null and that it is part of the tree structure. If the parent node is null, it throws an
+     * IllegalArgumentException. If the parent node is not part of the tree, it also throws an IllegalArgumentException.
+     * This method is used as a precondition check before adding a child node to ensure that the operation is performed
+     * on a valid parent node within the tree.
      *
-     * @param parentNode the parent node to be checked for validity before
-     * adding a child node
-     * @throws IllegalArgumentException if the parent node is null or not part
-     * of the tree
+     * @param parentNode the parent node to be checked for validity before adding a child node
+     * @throws IllegalArgumentException if the parent node is null or not part of the tree
      */
     public void checkParentProps(EditNode parentNode) throws IllegalArgumentException {
         if (parentNode == null) {
@@ -495,21 +458,15 @@ public class EditTree {
     }
 
     /**
-     * Checks the properties of the new node and parent node to ensure they are
-     * valid for adding a child node. This method verifies that both nodes are
-     * not null and that the new node can be a child of the parent node. If
-     * either node is null, it throws an IllegalArgumentException. If the new
-     * node cannot be a child of the parent node, it also throws an
-     * IllegalArgumentException. This method is used as a precondition check
-     * before adding a child node to ensure that the operation is performed on
-     * valid nodes within the tree.
+     * Checks the properties of the new node and parent node to ensure they are valid for adding a child node. This
+     * method verifies that both nodes are not null and that the new node can be a child of the parent node. If either
+     * node is null, it throws an IllegalArgumentException. If the new node cannot be a child of the parent node, it
+     * also throws an IllegalArgumentException. This method is used as a precondition check before adding a child node
+     * to ensure that the operation is performed on valid nodes within the tree.
      *
-     * @param newNode the new node to be checked for validity before adding as a
-     * child
-     * @param parentNode the parent node to be checked for validity before
-     * adding a child node
-     * @throws IllegalArgumentException if either node is null or the new node
-     * cannot be a child of the parent node
+     * @param newNode the new node to be checked for validity before adding as a child
+     * @param parentNode the parent node to be checked for validity before adding a child node
+     * @throws IllegalArgumentException if either node is null or the new node cannot be a child of the parent node
      */
     public void checkNewAndParentProps(EditNodeAbstract newNode, EditNode parentNode) throws IllegalArgumentException {
         if (newNode == null || parentNode == null) {
@@ -526,8 +483,7 @@ public class EditTree {
      * Checks if the parent node is part of the tree structure.
      *
      * @param node the parent node to be checked
-     * @throws IllegalArgumentException if the parent node is not part of the
-     * tree
+     * @throws IllegalArgumentException if the parent node is not part of the tree
      */
     public void checkMembership(EditNode node) throws IllegalArgumentException {
         if (!isNodeOfThisTree(node)) {
@@ -572,8 +528,8 @@ public class EditTree {
      *
      * @param parentNode the parent node to which the child will be added
      * @param newNode the new node to be added as a child
-     * @param index the index at which the new node should be inserted under the
-     * parent node, or -1 to append to the end of the children list
+     * @param index the index at which the new node should be inserted under the parent node, or -1 to append to the end
+     * of the children list
      */
     public void addChild(EditNodeAbstract parentNode, EditNodeAbstract newNode, int index) {
         checkNewAndParentProps(newNode, parentNode);
@@ -589,14 +545,12 @@ public class EditTree {
     }
 
     /**
-     * Removes a child node from the specified parent node. This method takes
-     * the parent node and the child node to be removed as parameters.
+     * Removes a child node from the specified parent node. This method takes the parent node and the child node to be
+     * removed as parameters.
      *
-     * @param parentNode the parent node from which the child node should be
-     * removed
+     * @param parentNode the parent node from which the child node should be removed
      * @param child the child node to be removed from the parent node
-     * @return true if the child node was successfully removed from the parent
-     * node, false otherwise
+     * @return true if the child node was successfully removed from the parent node, false otherwise
      */
     public boolean removeChild(EditNodeAbstract parentNode, EditNodeAbstract child) {
         checkParentProps(parentNode);
@@ -611,19 +565,15 @@ public class EditTree {
     }
 
     /**
-     * Removes a node from the tree based on the provided child node. This
-     * method takes the child node to be removed as a parameter. It first checks
-     * if the child node is null. Then, it retrieves the parent node of the
-     * child node. If the parent node is null, it returns false, indicating that
-     * the child node cannot be removed because it has no parent. If the parent
-     * node is found, it checks if the parent node is part of the tree using the
-     * checkParentMembership method. Finally, it removes the child node from its
-     * parent and returns true if the child was successfully removed, or false
-     * if the child was not found among the parent's children.
+     * Removes a node from the tree based on the provided child node. This method takes the child node to be removed as
+     * a parameter. It first checks if the child node is null. Then, it retrieves the parent node of the child node. If
+     * the parent node is null, it returns false, indicating that the child node cannot be removed because it has no
+     * parent. If the parent node is found, it checks if the parent node is part of the tree using the
+     * checkParentMembership method. Finally, it removes the child node from its parent and returns true if the child
+     * was successfully removed, or false if the child was not found among the parent's children.
      *
      * @param child the child node to be removed from the tree
-     * @return true if the child node was successfully removed from the tree,
-     * false otherwise
+     * @return true if the child node was successfully removed from the tree, false otherwise
      */
     public boolean removeNode(EditNodeAbstract child) {
         if (child == null) {
@@ -643,9 +593,8 @@ public class EditTree {
      * @param nodeId the ID of the node to be removed from the tree
      * @param nodeLeft the left range of the node to search for
      * @param nodeTimes the times range of the node to search for
-     * @return the removed node if it was successfully removed from the tree, or
-     * null if no node with the specified ID exists in the tree or if the node
-     * could not be removed
+     * @return the removed node if it was successfully removed from the tree, or null if no node with the specified ID
+     * exists in the tree or if the node could not be removed
      */
     public EditNode removeNode(long nodeId, long nodeLeft, long nodeTimes) {
         EditNodeAbstract node = findNodeByIdAndRange(nodeId, nodeLeft, nodeTimes);
@@ -668,8 +617,7 @@ public class EditTree {
     }
 
     /**
-     * Removes multiple nodes from the tree efficiently. Nodes are removed in
-     * reverse order to maintain correct indices.
+     * Removes multiple nodes from the tree efficiently. Nodes are removed in reverse order to maintain correct indices.
      *
      * @param entries of the nodes to remove
      */
@@ -681,12 +629,10 @@ public class EditTree {
     }
 
     /**
-     * Returns the total number of nodes in the tree. This method performs a
-     * traversal of the tree structure to count all nodes, starting from the
-     * root node and including all descendant nodes. It uses a stack to keep
-     * track of nodes to visit, and increments a counter for each node
-     * encountered during the traversal. The final count is returned as the
-     * total number of nodes in the tree.
+     * Returns the total number of nodes in the tree. This method performs a traversal of the tree structure to count
+     * all nodes, starting from the root node and including all descendant nodes. It uses a stack to keep track of nodes
+     * to visit, and increments a counter for each node encountered during the traversal. The final count is returned as
+     * the total number of nodes in the tree.
      *
      * @return the total number of nodes in the tree
      */
@@ -715,10 +661,9 @@ public class EditTree {
     }
 
     /**
-     * Clears the tree by removing all nodes. This method iterates through the
-     * children of the root node and removes each child node until there are no
-     * more children left. It effectively resets the tree to an empty state,
-     * leaving only the root node without any descendants.
+     * Clears the tree by removing all nodes. This method iterates through the children of the root node and removes
+     * each child node until there are no more children left. It effectively resets the tree to an empty state, leaving
+     * only the root node without any descendants.
      */
     public void clear() {
         while (root.getChildCount() > 0) {
@@ -728,13 +673,11 @@ public class EditTree {
     }
 
     /**
-     * Builds a set of reachable node IDs starting from the specified node. This
-     * method performs a traversal of the tree structure beginning at the given
-     * node and collects the edit IDs of all reachable nodes, including the
-     * starting node itself. The collected IDs are added to the provided set,
-     * which can be used for various purposes such as tracking visited nodes,
-     * performing operations on specific subsets of the tree, or for debugging
-     * and analysis of the tree structure.
+     * Builds a set of reachable node IDs starting from the specified node. This method performs a traversal of the tree
+     * structure beginning at the given node and collects the edit IDs of all reachable nodes, including the starting
+     * node itself. The collected IDs are added to the provided set, which can be used for various purposes such as
+     * tracking visited nodes, performing operations on specific subsets of the tree, or for debugging and analysis of
+     * the tree structure.
      *
      * @param node the node to start the traversal from
      * @param reachable the set to which reachable node IDs will be added
@@ -797,9 +740,8 @@ public class EditTree {
     }
 
     /**
-     * Returns the root type descriptor for this tree, if set. Used by the
-     * parser to assign a type to the root node when its name does not match any
-     * type in the model.
+     * Returns the root type descriptor for this tree, if set. Used by the parser to assign a type to the root node when
+     * its name does not match any type in the model.
      *
      * @return the root type descriptor, or {@code null} if not set.
      */
@@ -808,13 +750,11 @@ public class EditTree {
     }
 
     /**
-     * Sets the root type descriptor for this tree. This allows the parser to
-     * assign a type to the root node without hardcoding a specific type name.
-     * The caller should obtain the root type from the model definition (e.g.,
+     * Sets the root type descriptor for this tree. This allows the parser to assign a type to the root node without
+     * hardcoding a specific type name. The caller should obtain the root type from the model definition (e.g.,
      * JsonItemDefinition.getRootClass()).
      *
-     * @param rootType the root type descriptor to set, or {@code null} to
-     * clear.
+     * @param rootType the root type descriptor to set, or {@code null} to clear.
      */
     public void setRootType(JsonTypeDescriptor rootType) {
         this.rootType = rootType;
@@ -829,9 +769,8 @@ public class EditTree {
     }
 
     /**
-     * Returns the provider synonym this tree is loaded under. The main
-     * resource carries no provider alias of its own and defaults to
-     * {@code this}.
+     * Returns the provider synonym this tree is loaded under. The main resource carries no provider alias of its own
+     * and defaults to {@code this}.
      *
      * @return the provider synonym
      */
@@ -858,17 +797,14 @@ public class EditTree {
     }
 
     /**
-     * Sets the parse mode of this tree. WITHOUT_SEMANTICS stops the
-     * background parser and discards the parse queue. SOFT_PARSE starts
-     * the background parser and re-parses the whole tree. HARD_PARSE is
-     * only accepted when every node has the edit status OKAY; it drains
-     * the remaining parse queue synchronously and stops the background
-     * threads, because every following change is parsed synchronously
-     * by {@link #parseNow(EditNodeAbstract)}.
+     * Sets the parse mode of this tree. WITHOUT_SEMANTICS stops the background parser and discards the parse queue.
+     * SOFT_PARSE starts the background parser and re-parses the whole tree. HARD_PARSE is only accepted when every node
+     * has the edit status OKAY; it drains the remaining parse queue synchronously and stops the background threads,
+     * because every following change is parsed synchronously by {@link #parseNow(EditNodeAbstract)}.
      *
      * @param newMode the parse mode to set, {@code null} is ignored
-     * @return true if the mode was applied, false if HARD_PARSE was
-     * rejected because the tree still contains parse problems
+     * @return true if the mode was applied, false if HARD_PARSE was rejected because the tree still contains parse
+     * problems
      */
     public boolean setParseMode(ParseMode newMode) {
         if (newMode == null || newMode == parseMode) {
@@ -905,9 +841,8 @@ public class EditTree {
     }
 
     /**
-     * Parses the given node and all nodes queued by the parse cascade
-     * synchronously on the calling thread. Used in HARD_PARSE mode so
-     * that every change is verified before the mutating call returns.
+     * Parses the given node and all nodes queued by the parse cascade synchronously on the calling thread. Used in
+     * HARD_PARSE mode so that every change is verified before the mutating call returns.
      *
      * @param node the node to parse, may be {@code null}
      */
@@ -921,9 +856,36 @@ public class EditTree {
     }
 
     /**
-     * Processes the parse queue synchronously until it is empty.
-     * Cascades (nodes re-queued during parsing) are handled by the loop;
-     * the hash-based skip in the parser bounds the number of passes.
+     * Parses a detached subtree synchronously against this tree (hard parse dry run): the caller has wired the
+     * parent and tree references of the detached root and its subtree, the parse runs like any hard parse but
+     * without tree membership - nothing is docked, no notification fires, the tree itself stays untouched.
+     *
+     * @param detachedRoot the root of the detached subtree to parse
+     */
+    void parseDetached(EditNodeAbstract detachedRoot) {
+        if (detachedRoot == null) {
+            return;
+        }
+        ensureParserService();
+        // Pre-order walk of the whole clone: parents first, so the children
+        // resolve against the settled parent type. Nodes the propagation
+        // skips (explicit casts) get their parse here too.
+        parseDetachedSubtree(detachedRoot);
+        drainParseQueue();
+    }
+
+    private void parseDetachedSubtree(EditNodeAbstract node) {
+        parserService.parseNodeSafely(node);
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof EditNodeAbstract child) {
+                parseDetachedSubtree(child);
+            }
+        }
+    }
+
+    /**
+     * Processes the parse queue synchronously until it is empty. Cascades (nodes re-queued during parsing) are handled
+     * by the loop; the hash-based skip in the parser bounds the number of passes.
      */
     private void drainParseQueue() {
         EditNodeAbstract queued;
@@ -934,8 +896,7 @@ public class EditTree {
     }
 
     /**
-     * Creates the parser service instance without starting its
-     * background threads, so parseNodeSafely can be used for
+     * Creates the parser service instance without starting its background threads, so parseNodeSafely can be used for
      * synchronous parsing.
      */
     private void ensureParserService() {
@@ -969,10 +930,9 @@ public class EditTree {
     }
 
     /**
-     * Sets the JsonModelDescriptor for this tree. In SOFT_PARSE mode the
-     * background parser is started and the whole tree is queued for
-     * parsing; in HARD_PARSE mode the tree is parsed synchronously; in
-     * WITHOUT_SEMANTICS mode nothing happens.
+     * Sets the JsonModelDescriptor for this tree. In SOFT_PARSE mode the background parser is started and the whole
+     * tree is queued for parsing; in HARD_PARSE mode the tree is parsed synchronously; in WITHOUT_SEMANTICS mode
+     * nothing happens.
      *
      * @param jsonModelDescriptor the model descriptor to set.
      */
@@ -1019,8 +979,8 @@ public class EditTree {
     }
 
     /**
-     * Startet den TypeParserService für diesen Baum, falls noch nicht
-     * gestartet. Erstellt einen neuen Service, wenn keiner existiert.
+     * Startet den TypeParserService für diesen Baum, falls noch nicht gestartet. Erstellt einen neuen Service, wenn
+     * keiner existiert.
      */
     public void startParserService() {
         if (parserService == null) {
@@ -1041,8 +1001,7 @@ public class EditTree {
     }
 
     /**
-     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing
-     * zu erzwingen.
+     * Markiert alle Knoten im Baum als EDITED, um ein vollständiges Reparsing zu erzwingen.
      *
      * @param node der Startknoten
      */
@@ -1060,10 +1019,8 @@ public class EditTree {
     }
 
     /**
-     * Adds all nodes in the subtree rooted at the given node to the parse
-     * queue. Unlike only queuing the root, this ensures every node is
-     * processed, not just the root whose children would otherwise stay in
-     * EDITED state.
+     * Adds all nodes in the subtree rooted at the given node to the parse queue. Unlike only queuing the root, this
+     * ensures every node is processed, not just the root whose children would otherwise stay in EDITED state.
      *
      * @param node the starting node (normally root)
      */
@@ -1090,9 +1047,8 @@ public class EditTree {
     }
 
     /**
-     * Sets the TypeParserService for this tree. The service is responsible for
-     * on-the-fly type parsing of nodes. Automatically starts the service if
-     * it's not null and not already running.
+     * Sets the TypeParserService for this tree. The service is responsible for on-the-fly type parsing of nodes.
+     * Automatically starts the service if it's not null and not already running.
      *
      * @param parserService the parser service to set
      */
@@ -1118,8 +1074,8 @@ public class EditTree {
     }
 
     /**
-     * Sets the TypeParserListener for this tree. The listener receives
-     * notifications about node changes that require re-parsing.
+     * Sets the TypeParserListener for this tree. The listener receives notifications about node changes that require
+     * re-parsing.
      *
      * @param parserListener the parser listener to set
      */
@@ -1183,19 +1139,8 @@ public class EditTree {
         if (parent instanceof EditNodeProperty) {
             propagateElementTypeToChildren((EditNodeProperty) parent);
         }
-        // A new field lets waiting annotations re-bind: orphaned composite
-        // anchors targeting the new child are re-queued so the parse cascade
-        // moves them under the field node (annotation concept, decision 7).
-        if (parent instanceof EditNodeObject owner && !AnnotationKeys.isAnnotationKey(child.getName())) {
-            final String fieldName = child.getName();
-            for (int i = 0; i < owner.getChildCount(); i++) {
-                if (owner.getChildAt(i) instanceof EditNodeProperty sibling
-                        && AnnotationKeys.isCompositeKey(sibling.getName())
-                        && fieldName.equals(AnnotationKeys.targetField(sibling.getName()))) {
-                    markForReparse(sibling);
-                }
-            }
-        }
+        // Note: the composite target of an annotation is structural (derived
+        // from its parent), so a new field needs no orphan re-bind pass here.
         if (parseMode == ParseMode.HARD_PARSE) {
             // TODO hard parse: the automatic tryAssignType in the tree-level
             // add methods resolves the anonymous placeholder "Object" via
@@ -1256,24 +1201,18 @@ public class EditTree {
     }
 
     /**
-     * Hands the element type declared by the given property's field
-     * descriptor to the property's object children. Runs at the field event
-     * ({@link EditNodeProperty#setJsonField}) and whenever a child is added
-     * under a field-carrying property, so collection elements carry their
-     * type immediately instead of waiting for the next parse generation.
-     * Map entries carry no field: there the value type comes from the
-     * mapping of the parent map type ({@code mappingAllFields}).
+     * Hands the element type declared by the given property's field descriptor to the property's object children. Runs
+     * at the field event ({@link EditNodeProperty#setJsonField}) and whenever a child is added under a field-carrying
+     * property, so collection elements carry their type immediately instead of waiting for the next parse generation.
+     * Map entries carry no field: there the value type comes from the mapping of the parent map type
+     * ({@code mappingAllFields}).
      * <p>
-     * State-aware rules: children without a confirmed parse result and
-     * without an explicit cast decision get the element type as an inherited
-     * pre-assignment and are queued for the confirming pass. Children
-     * confirmed as DONE + OKAY stay untouched while their type fits the
-     * expected element type ({@code contains}, including implementors, or
-     * {@code containsSuper} for subtypes); a confirmed child with a
-     * non-fitting type is queued - an inherited cast is redirected to the
-     * new element type, an explicit cast (user input, {@code _class}) keeps
-     * its decision and the parser reports the mismatch. Children with an
-     * explicit cast decision are never overwritten. In WITHOUT_SEMANTICS
+     * State-aware rules: children without a confirmed parse result and without an explicit cast decision get the
+     * element type as an inherited pre-assignment and are queued for the confirming pass. Children confirmed as DONE +
+     * OKAY stay untouched while their type fits the expected element type ({@code contains}, including implementors, or
+     * {@code containsSuper} for subtypes); a confirmed child with a non-fitting type is queued - an inherited cast is
+     * redirected to the new element type, an explicit cast (user input, {@code _class}) keeps its decision and the
+     * parser reports the mismatch. Children with an explicit cast decision are never overwritten. In WITHOUT_SEMANTICS
      * mode nothing happens - the parser sleeps.
      * </p>
      *
@@ -1291,7 +1230,7 @@ public class EditTree {
         // strings: its rows adopt the String element type. Annotations
         // anchored under a field node are no collection elements of that
         // field (annotation concept, decision 6).
-        if (AnnotationKeys.isAnnotationKey(property.getName())) {
+        if (property instanceof EditNodeAnnotation) {
             final JsonTypeDescriptor stringType = jsonModelDescriptor.getType("String");
             if (stringType != null) {
                 handElementTypeToChildren(property, stringType);
@@ -1328,13 +1267,10 @@ public class EditTree {
     }
 
     /**
-     * Hands the given element type to the object children of the property,
-     * applying the state-aware rules described in
-     * {@link #propagateElementTypeToChildren(EditNodeProperty)}: unconfirmed
-     * children without an explicit cast decision get the element type as an
-     * inherited pre-assignment and are queued for the confirming pass,
-     * confirmed children stay untouched while their type fits, and confirmed
-     * children with a non-fitting type are queued again.
+     * Hands the given element type to the object children of the property, applying the state-aware rules described in
+     * {@link #propagateElementTypeToChildren(EditNodeProperty)}: unconfirmed children without an explicit cast decision
+     * get the element type as an inherited pre-assignment and are queued for the confirming pass, confirmed children
+     * stay untouched while their type fits, and confirmed children with a non-fitting type are queued again.
      *
      * @param property the property whose children receive the element type
      * @param expected the expected element type
@@ -1371,9 +1307,9 @@ public class EditTree {
     }
 
     /**
-     * The parser sleeps without a model, exactly like in WITHOUT_SEMANTICS mode: a tree without a loaded
-     * descriptor has nothing to check against, so no node is queued and no parse pass runs. Loading a
-     * descriptor (or switching the mode with a present descriptor) wakes it up again.
+     * The parser sleeps without a model, exactly like in WITHOUT_SEMANTICS mode: a tree without a loaded descriptor has
+     * nothing to check against, so no node is queued and no parse pass runs. Loading a descriptor (or switching the
+     * mode with a present descriptor) wakes it up again.
      *
      * @return true when the parser has nothing to work with and must stay quiet
      */
@@ -1382,9 +1318,8 @@ public class EditTree {
     }
 
     /**
-     * Marks the given node as EDITED ("zu pruefen") and queues it for the
-     * next parse pass. In HARD_PARSE mode the queue is drained synchronously
-     * so the caller returns with the verified state.
+     * Marks the given node as EDITED ("zu pruefen") and queues it for the next parse pass. In HARD_PARSE mode the queue
+     * is drained synchronously so the caller returns with the verified state.
      *
      * @param node the node to queue for re-parsing
      */
@@ -1397,8 +1332,7 @@ public class EditTree {
     }
 
     /**
-     * Returns the parse queue for this tree. Contains nodes that are waiting to
-     * be parsed.
+     * Returns the parse queue for this tree. Contains nodes that are waiting to be parsed.
      *
      * @return the parse queue (thread-safe)
      */
@@ -1416,11 +1350,10 @@ public class EditTree {
     }
 
     /**
-     * Adds a node to the parse queue, ensuring it is always queued even if it
-     * was already pending. This fixes a race condition where the UI-thread
-     * re-queues a node that the parser is currently processing: the node is
-     * first removed from the pending set and then re-added, so the parser's
-     * subsequent removeFromPending call does not lose the re-queue.
+     * Adds a node to the parse queue, ensuring it is always queued even if it was already pending. This fixes a race
+     * condition where the UI-thread re-queues a node that the parser is currently processing: the node is first removed
+     * from the pending set and then re-added, so the parser's subsequent removeFromPending call does not lose the
+     * re-queue.
      *
      * @param node the node to add to the parse queue
      */
@@ -1440,9 +1373,8 @@ public class EditTree {
     }
 
     /**
-     * Removes a node from the pending set. Does NOT remove from the parse
-     * queue: if the node was re-queued by addToParseQueue while the parser was
-     * processing it, the re-queued entry must survive so the parser picks it up
+     * Removes a node from the pending set. Does NOT remove from the parse queue: if the node was re-queued by
+     * addToParseQueue while the parser was processing it, the re-queued entry must survive so the parser picks it up
      * again.
      *
      * @param node the node to remove
@@ -1454,8 +1386,8 @@ public class EditTree {
     }
 
     /**
-     * Waits for the signal that a node was added to the parse queue, at most 500 milliseconds. Lets the queue
-     * processor idle without busy waiting and keeps it reactive for shutdown.
+     * Waits for the signal that a node was added to the parse queue, at most 500 milliseconds. Lets the queue processor
+     * idle without busy waiting and keeps it reactive for shutdown.
      *
      * @throws InterruptedException if the wait is interrupted
      */
@@ -1464,8 +1396,8 @@ public class EditTree {
     }
 
     /**
-     * Weist Typen aus dem Modell allen Nodes im Baum zu. Iteriert durch den
-     * gesamten Baum (DFS) und ruft tryAssignType() auf jedem Node auf.
+     * Weist Typen aus dem Modell allen Nodes im Baum zu. Iteriert durch den gesamten Baum (DFS) und ruft
+     * tryAssignType() auf jedem Node auf.
      */
     public void assignTypesFromModel() {
         if (jsonModelDescriptor != null) {
@@ -1508,9 +1440,8 @@ public class EditTree {
     }
 
     /**
-     * Performs range relabeling on the specified node and its descendants. This
-     * method ensures that the node and all its descendants have valid range
-     * labels based on their position in the tree.
+     * Performs range relabeling on the specified node and its descendants. This method ensures that the node and all
+     * its descendants have valid range labels based on their position in the tree.
      *
      * @param node the node to perform range relabeling on
      */
@@ -1521,9 +1452,8 @@ public class EditTree {
 
     // ========== On-the-Fly Parser Lifecycle Methods ==========
     /**
-     * Triggers a full re-parse of the entire tree. Marks all nodes as EDITED
-     * and adds all nodes to the parse queue. This is useful when you want to
-     * force a complete re-evaluation of types.
+     * Triggers a full re-parse of the entire tree. Marks all nodes as EDITED and adds all nodes to the parse queue.
+     * This is useful when you want to force a complete re-evaluation of types.
      */
     public void triggerFullReparse() {
         if (parserService != null && parserService.isRunning()) {
@@ -1533,8 +1463,8 @@ public class EditTree {
     }
 
     /**
-     * Closes this EditTree and releases resources. Stops the parser service and
-     * cleans up. Should be called when the tree is no longer needed.
+     * Closes this EditTree and releases resources. Stops the parser service and cleans up. Should be called when the
+     * tree is no longer needed.
      */
     public void close() {
         stopParserService();

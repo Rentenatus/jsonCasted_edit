@@ -13,8 +13,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents a JSON object node in the editable tree structure. Contains
- * object-specific properties such as object ID, info, and type descriptor.
+ * Represents a JSON object node in the editable tree structure. Contains object-specific properties such as object ID,
+ * info, and type descriptor.
  *
  * @author Janusch Rentenatus
  */
@@ -31,28 +31,24 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile JsonTypeDescriptor jsonType;
 
     /**
-     * Cast name extracted from the {@code TERM_CLASS} (_class) entry during
-     * JSON-to-EditNode conversion. Serves as the primary lookup key for type
-     * resolution in {@link #tryAssignType(JsonModelDescriptor)} so that the
-     * correct substructure can be parsed even when the node name differs from
-     * the type name (e.g. node "config1" vs. type "ConfigRoot").
+     * Cast name extracted from the {@code TERM_CLASS} (_class) entry during JSON-to-EditNode conversion. Serves as the
+     * primary lookup key for type resolution in {@link #tryAssignType(JsonModelDescriptor)} so that the correct
+     * substructure can be parsed even when the node name differs from the type name (e.g. node "config1" vs. type
+     * "ConfigRoot").
      * <p>
-     * May also be set by the parser's parent-type inference or root-type
-     * handling to cache an inferred type name for subsequent re-parses. Remains
-     * {@code null} when no {@code TERM_CLASS} was present and no inference has
-     * assigned a type.
+     * May also be set by the parser's parent-type inference or root-type handling to cache an inferred type name for
+     * subsequent re-parses. Remains {@code null} when no {@code TERM_CLASS} was present and no inference has assigned a
+     * type.
      * </p>
      */
     private volatile String castName;
 
     /**
-     * Provenance of the cast: {@code true} when the cast was inherited from
-     * the element type of the containing property's field descriptor (a
-     * pre-assignment by the element type propagation) instead of being an
-     * explicit decision (user input, {@code _class} in the JSON or the
-     * parser's own type resolution). An inherited cast stays redirectable:
-     * a later field event may overwrite it, and the field set inference may
-     * still refine an inherited interface cast to a concrete implementor.
+     * Provenance of the cast: {@code true} when the cast was inherited from the element type of the containing
+     * property's field descriptor (a pre-assignment by the element type propagation) instead of being an explicit
+     * decision (user input, {@code _class} in the JSON or the parser's own type resolution). An inherited cast stays
+     * redirectable: a later field event may overwrite it, and the field set inference may still refine an inherited
+     * interface cast to a concrete implementor.
      */
     private volatile boolean castInherited;
 
@@ -165,9 +161,8 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Returns the cast name for this node. This is the {@code TERM_CLASS}
-     * content extracted during JSON conversion, or a type name set by the
-     * parser's inference logic. Used as the primary lookup key in
+     * Returns the cast name for this node. This is the {@code TERM_CLASS} content extracted during JSON conversion, or
+     * a type name set by the parser's inference logic. Used as the primary lookup key in
      * {@link #tryAssignType(JsonModelDescriptor)}.
      *
      * @return the cast name, or {@code null} if none was set
@@ -177,9 +172,8 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Sets the cast name. When set, {@link #tryAssignType} uses
-     * {@code descriptor.getType(castName)} as the primary lookup before falling
-     * back to the node name.
+     * Sets the cast name. When set, {@link #tryAssignType} uses {@code descriptor.getType(castName)} as the primary
+     * lookup before falling back to the node name.
      *
      * @param castName the cast name to set, or {@code null} to clear
      */
@@ -201,8 +195,8 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Returns whether the current cast was inherited from the containing
-     * property's field descriptor instead of being decided explicitly.
+     * Returns whether the current cast was inherited from the containing property's field descriptor instead of being
+     * decided explicitly.
      *
      * @return true if the cast is an inherited pre-assignment
      */
@@ -211,11 +205,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Checks whether this node carries an explicit cast decision of its own:
-     * a cast that is set, differs from the anonymous placeholder name and was
-     * not inherited from the containing field. Explicit decisions are never
-     * overwritten by the element type propagation; a mismatch against the
-     * field's element type is reported by the parser instead.
+     * Checks whether this node carries an explicit cast decision of its own: a cast that is set, differs from the
+     * anonymous placeholder name and was not inherited from the containing field. Explicit decisions are never
+     * overwritten by the element type propagation; a mismatch against the field's element type is reported by the
+     * parser instead.
      *
      * @return true if the cast is an explicit decision
      */
@@ -225,12 +218,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     }
 
     /**
-     * Adopts the element type inherited from the containing property's field
-     * descriptor. An inherited cast carries no decision of its own: the
-     * parser confirms it in a later pass, a field change may redirect it and
-     * the field set inference may refine an inherited interface cast. The
-     * parser is not notified here - the propagation caller queues the node
-     * for the confirming pass itself.
+     * Adopts the element type inherited from the containing property's field descriptor. An inherited cast carries no
+     * decision of its own: the parser confirms it in a later pass, a field change may redirect it and the field set
+     * inference may refine an inherited interface cast. The parser is not notified here - the propagation caller queues
+     * the node for the confirming pass itself.
      *
      * @param elementType the element type descriptor to adopt, not null
      */
@@ -364,6 +355,11 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
     @Override
     public boolean canBeParentOfPropertyData() {
+        return true;
+    }
+
+    @Override
+    public boolean canBeParentOfAnnotation() {
         return true;
     }
 

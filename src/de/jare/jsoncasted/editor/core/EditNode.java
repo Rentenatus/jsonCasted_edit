@@ -11,10 +11,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents a node in the editable JSON tree structure. Extends
- * JsonTreeNodeData with tree structure methods and edit state management.
- * Implementations include EditNodeAbstract, EditNodeObject, EditNodeProperty,
- * and EditNodePropertyArr.
+ * Represents a node in the editable JSON tree structure. Extends JsonTreeNodeData with tree structure methods and edit
+ * state management. Implementations include EditNodeAbstract, EditNodeObject, EditNodeProperty, and
+ * EditNodePropertyArr.
  *
  * @author Janusch Rentenatus
  */
@@ -60,17 +59,16 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     long getEditId();
 
     /**
-     * Returns the right-side string representation of this node. Used for
-     * displaying node information in a readable format.
+     * Returns the right-side string representation of this node. Used for displaying node information in a readable
+     * format.
      *
      * @return the right string representation
      */
     public String rightString();
 
     /**
-     * Callback that is invoked when an object child has been removed from this
-     * node. Allows parent nodes to update their internal state when a child is
-     * removed.
+     * Callback that is invoked when an object child has been removed from this node. Allows parent nodes to update
+     * their internal state when a child is removed.
      *
      * @param child the EditNodeObject that was removed
      */
@@ -78,9 +76,8 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     }
 
     /**
-     * Callback that is invoked when a property child has been removed from this
-     * node. Allows parent nodes to update their internal state when a child is
-     * removed.
+     * Callback that is invoked when a property child has been removed from this node. Allows parent nodes to update
+     * their internal state when a child is removed.
      *
      * @param child the EditNodeProperty that was removed
      */
@@ -98,8 +95,7 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     /**
      * Checks if this node can be a parent of object data nodes.
      *
-     * @return true if this node can have EditNodeObject children, false
-     * otherwise
+     * @return true if this node can have EditNodeObject children, false otherwise
      */
     default boolean canBeParentOfObjectData() {
         return false;
@@ -108,8 +104,7 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     /**
      * Checks if this node can be a parent of property data nodes.
      *
-     * @return true if this node can have EditNodeProperty children, false
-     * otherwise
+     * @return true if this node can have EditNodeProperty children, false otherwise
      */
     default boolean canBeParentOfPropertyData() {
         return false;
@@ -118,10 +113,18 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     /**
      * Checks if this node can be a parent of array property data nodes.
      *
-     * @return true if this node can have EditNodePropertyArr children, false
-     * otherwise
+     * @return true if this node can have EditNodePropertyArr children, false otherwise
      */
     default boolean canBeParentOfPropertyArrData() {
+        return false;
+    }
+
+    /**
+     * Checks if this node can be a parent of annotation nodes.
+     *
+     * @return true if this node can have EditNodeAnnotation children, false otherwise
+     */
+    default boolean canBeParentOfAnnotation() {
         return false;
     }
 
@@ -140,8 +143,7 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     long getRightRange();
 
     /**
-     * Returns the times range value for tracking node creation/modification
-     * order.
+     * Returns the times range value for tracking node creation/modification order.
      *
      * @return the times range value
      */
@@ -193,8 +195,8 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     }
 
     /**
-     * Marks this node as OKAY and sets a confirmation message containing
-     * the model name. If no descriptor is available, the message stays empty.
+     * Marks this node as OKAY and sets a confirmation message containing the model name. If no descriptor is available,
+     * the message stays empty.
      *
      * @param descriptor the model descriptor used for the assignment
      */
@@ -204,9 +206,8 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     }
 
     /**
-     * Attempts to assign the matching type/field descriptor from the model.
-     * On success, sets the descriptor and OKAY status. On failure, sets
-     * an appropriate warning or error status.
+     * Attempts to assign the matching type/field descriptor from the model. On success, sets the descriptor and OKAY
+     * status. On failure, sets an appropriate warning or error status.
      *
      * @param descriptor the current JsonModelDescriptor
      * @return true if assignment was successful, false otherwise
@@ -229,8 +230,7 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
      * Checks if this node is or has the specified node as a parent.
      *
      * @param maybeParent the node to check as parent
-     * @return true if this node is the same as maybeParent or has it as a
-     * parent, false otherwise
+     * @return true if this node is the same as maybeParent or has it as a parent, false otherwise
      */
     default boolean isOrHasParent(EditNode maybeParent) {
         return this == maybeParent || hasParent(maybeParent);
@@ -304,8 +304,8 @@ public sealed interface EditNode permits EditNodeAbstract, EditNodeObject, EditN
     public String getTypeKey();
 
     /**
-     * Returns the attributes of this node as a map of JackAttribut objects.
-     * This ensures type information is always available.
+     * Returns the attributes of this node as a map of JackAttribut objects. This ensures type information is always
+     * available.
      *
      * @return the attributes map, or null if not supported
      */

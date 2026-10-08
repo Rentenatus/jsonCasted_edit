@@ -15,10 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * Writes an {@link EditTree} back to wood JSON - the counterpart of {@link JsonTreeConverter}. Field level
- * annotations are flattened into their composite keys ({@code "@doc:profile"} at the object level), object level
- * annotations keep their simple keys. Transient annotations are skipped, but only when the declaration is loaded
- * with the tree: without a model descriptor nothing is filtered (annotation concept, decisions 8 and 9).
+ * Writes an {@link EditTree} back to wood JSON - the counterpart of {@link JsonTreeConverter}. Field level annotations
+ * are flattened into their composite keys ({@code "@doc:profile"} at the object level), object level annotations keep
+ * their simple keys. Transient annotations are skipped, but only when the declaration is loaded with the tree: without
+ * a model descriptor nothing is filtered (annotation concept, decisions 8 and 9).
  *
  * @author Janusch Rentenatus
  */
@@ -57,8 +57,8 @@ public final class EditTreeWriter {
     }
 
     /**
-     * Writes the {@code _woodModel} entry when the tree carries a loaded descriptor and a description file path, so
-     * a saved file finds its description again on reload.
+     * Writes the {@code _woodModel} entry when the tree carries a loaded descriptor and a description file path, so a
+     * saved file finds its description again on reload.
      */
     private static void writeWoodModel(EditTree tree, StringBuilder sb) {
         final JsonModelDescriptor descriptor = tree.getJsonModelDescriptor();
@@ -74,8 +74,8 @@ public final class EditTreeWriter {
     }
 
     /**
-     * Writes the members of an object node (the root or an element object) in child order: field level annotations
-     * are flattened to their composite key right before their field, object level annotations keep their position.
+     * Writes the members of an object node (the root or an element object) in child order: field level annotations are
+     * flattened to their composite key right before their field, object level annotations keep their position.
      * Transient annotations are skipped when their declaration is loaded.
      */
     private static void writeObjectMembers(EditNodeObject node, int depth, StringBuilder sb) {
@@ -84,8 +84,8 @@ public final class EditTreeWriter {
             if (!(node.getChildAt(i) instanceof EditNodeProperty prop)) {
                 continue;
             }
-            if (AnnotationKeys.isAnnotationKey(prop.getName())) {
-                first = writeObjectLevelAnnotation(node, prop, depth, first, sb);
+            if (prop instanceof EditNodeAnnotation ann) {
+                first = writeObjectLevelAnnotation(node, ann, depth, first, sb);
                 continue;
             }
             first = writeFieldAnnotations(prop, depth, first, sb);
@@ -96,10 +96,10 @@ public final class EditTreeWriter {
     /**
      * Writes an object level annotation (simple key or orphan composite anchor) unless its declaration is transient.
      */
-    private static boolean writeObjectLevelAnnotation(EditNodeObject owner, EditNodeProperty prop, int depth,
+    private static boolean writeObjectLevelAnnotation(EditNodeObject owner, EditNodeAnnotation ann, int depth,
             boolean first, StringBuilder sb) {
-        final String annName = AnnotationKeys.annotationName(prop.getName());
-        final String target = AnnotationKeys.targetField(prop.getName());
+        final String annName = ann.getAnnotationName();
+        final String target = ann.getTargetField();
         final JsonTypeDescriptor ownerType = owner.getJsonType();
         if (ownerType != null) {
             if (target == null) {
@@ -113,36 +113,34 @@ public final class EditTreeWriter {
                 }
             }
         }
-        return writeProperty(prop, prop.getName(), AnnotationKeys.isCompositeKey(prop.getName()), depth, first, sb);
+        return writeProperty(ann, ann.getName(), ann.isComposite(), depth, first, sb);
     }
 
     /**
-     * Writes the annotation children of a field property as composite keys, unless their declaration for that field
-     * is transient.
+     * Writes the annotation children of a field property as composite keys, unless their declaration for that field is
+     * transient.
      */
     private static boolean writeFieldAnnotations(EditNodeProperty fieldProp, int depth, boolean first, StringBuilder sb) {
         for (int i = 0; i < fieldProp.getChildCount(); i++) {
-            if (!(fieldProp.getChildAt(i) instanceof EditNodeProperty ann)) {
+            if (!(fieldProp.getChildAt(i) instanceof EditNodeAnnotation ann)) {
                 continue;
             }
-            final String annName = AnnotationKeys.annotationName(ann.getName());
-            if (annName == null) {
-                continue;
-            }
+            final String annName = ann.getAnnotationName();
             final JsonFieldDescriptor field = fieldProp.getJsonField();
             if (field != null && isTransient(field.getAnnotation(annName))) {
                 continue;
             }
-            final String key = AnnotationKeys.PREFIX + annName + AnnotationKeys.SEPARATOR + fieldProp.getName();
-            writeProperty(ann, key, true, depth, first, sb);
+            // The composite target is structural: the display name of the
+            // annotation already is the composite key.
+            writeProperty(ann, ann.getName(), ann.isComposite(), depth, first, sb);
             first = false;
         }
         return first;
     }
 
     /**
-     * Writes a property (or annotation) with the given key. Composite keys are quoted because of the separator;
-     * plain keys stay unquoted in the wood style.
+     * Writes a property (or annotation) with the given key. Composite keys are quoted because of the separator; plain
+     * keys stay unquoted in the wood style.
      */
     private static boolean writeProperty(EditNodeProperty prop, String key, boolean quotedKey, int depth,
             boolean first, StringBuilder sb) {
@@ -169,8 +167,7 @@ public final class EditTreeWriter {
                 }
                 // Annotation children of a field node are no collection
                 // elements - they are flattened into composite keys.
-                if (child instanceof EditNodeProperty annChild
-                        && AnnotationKeys.isAnnotationKey(annChild.getName())) {
+                if (child instanceof EditNodeAnnotation) {
                     continue;
                 }
                 if (!first) {
@@ -281,9 +278,8 @@ public final class EditTreeWriter {
     }
 
     /**
-     * Writes a scalar row of an array. Rows carry no JSON node type in the tree, so the cast decides: a row parsed
-     * as String is quoted, everything else is written raw when it looks like a number or a boolean and quoted
-     * otherwise.
+     * Writes a scalar row of an array. Rows carry no JSON node type in the tree, so the cast decides: a row parsed as
+     * String is quoted, everything else is written raw when it looks like a number or a boolean and quoted otherwise.
      */
     private static void writeRowValue(EditNodeObject row, StringBuilder sb) {
         final String value = row.getValue();
@@ -330,11 +326,16 @@ public final class EditTreeWriter {
         for (int i = 0; i < value.length(); i++) {
             final char c = value.charAt(i);
             switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                case '\n' -> sb.append("\n");
-                case '\r' -> sb.append("\r");
-                case '\t' -> sb.append("\t");
+                case '"' ->
+                    sb.append("\\\"");
+                case '\\' ->
+                    sb.append("\\\\");
+                case '\n' ->
+                    sb.append("\n");
+                case '\r' ->
+                    sb.append("\r");
+                case '\t' ->
+                    sb.append("\t");
                 default -> {
                     if (c < 0x20) {
                         sb.append(String.format("\\u%04x", (int) c));
