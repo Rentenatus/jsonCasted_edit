@@ -68,8 +68,8 @@ public final class HardEditAdvisor {
      * value object (implementors of an interface instead of the approximate interface cast), collections as array
      * properties, enum values as scalar properties. A map object offers free entries with the mapping element
      * type.</li>
-     * <li>Object without a type or property without a resolved field: nothing (hard mode offers only known
-     * things).</li>
+     * <li>Object without a type or property without a resolved field: nothing, except map entries - they carry
+     * no field by design and offer their value like a 0:1 field of the map element type.</li>
      * <li>Collection property: rows of the declared element type (implementors on interface element types).</li>
      * <li>0:1 property without a value child: the value object of the declared type.</li>
      * <li>Annotation: string rows (an annotation is implicitly an array of strings).</li>
@@ -152,6 +152,19 @@ public final class HardEditAdvisor {
         }
         if (node instanceof EditNodeProperty property) {
             if (property.getJsonField() == null) {
+                if (isMapEntry(property)) {
+                    final JsonTypeDescriptor elementType = mapElementType(property, descriptor);
+                    if (elementType == null) {
+                        return "The element type of the map is unknown.";
+                    }
+                    if (isScalar(elementType)) {
+                        return "Map entry values are edited in place; new entries are added on the map object.";
+                    }
+                    if (hasObjectChild(property)) {
+                        return "The 0:1 value is already present.";
+                    }
+                    return null; // the entry offers its value, nothing to explain
+                }
                 return "The property has no resolved field.";
             }
             if (property.getJsonField().getCollectionType() != null
@@ -235,7 +248,8 @@ public final class HardEditAdvisor {
             List<ChildProposal> proposals) {
         final JsonFieldDescriptor field = property.getJsonField();
         if (field == null) {
-            return; // hard mode offers nothing without a resolved field
+            collectMapEntryChildren(property, descriptor, proposals);
+            return;
         }
         final JsonCollectionType collection = field.getCollectionType();
         if (collection != null && collection != JsonCollectionType.NONE) {
@@ -264,6 +278,54 @@ public final class HardEditAdvisor {
         for (String castName : castsFor(fieldType)) {
             proposals.add(new ChildProposal("value (" + castName + ")", typedObject("value", castName)));
         }
+    }
+
+    /**
+     * Children of a map entry: a map entry carries no field by design (map keys are dynamic, see
+     * {@link EditNodeProperty#tryAssignType}), so the value semantics come from the mapping of the parent map
+     * type - the entry behaves like a 0:1 field of the element type. Scalar element values are edited in place.
+     *
+     * @param property the selected property without a resolved field
+     * @param descriptor the model descriptor
+     * @param proposals the list the offers are added to
+     */
+    private static void collectMapEntryChildren(EditNodeProperty property, JsonModelDescriptor descriptor,
+            List<ChildProposal> proposals) {
+        final JsonTypeDescriptor elementType = mapElementType(property, descriptor);
+        if (elementType == null || isScalar(elementType) || hasObjectChild(property)) {
+            return; // scalar values are edited in place, an occupied entry already has its value
+        }
+        for (String castName : castsFor(elementType)) {
+            proposals.add(new ChildProposal("value (" + castName + ")", typedObject("value", castName)));
+        }
+    }
+
+    /**
+     * Returns the element type of the map the given property is an entry of, or null when the property is not a
+     * map entry or the element type is unknown.
+     *
+     * @param property the property to inspect
+     * @param descriptor the model descriptor
+     * @return the map element type, or null
+     */
+    private static JsonTypeDescriptor mapElementType(EditNodeProperty property, JsonModelDescriptor descriptor) {
+        if (!isMapEntry(property)) {
+            return null;
+        }
+        final JsonTypeDescriptor mapType = ((EditNodeObject) property.getParent()).getJsonType();
+        return descriptor.getType(mapType.getMappingAllFields().getTypeName());
+    }
+
+    /**
+     * Checks whether the given property is an entry of a map: its parent object type carries a mapping.
+     *
+     * @param property the property to inspect
+     * @return true when the property is a map entry
+     */
+    private static boolean isMapEntry(EditNodeProperty property) {
+        return property.getParent() instanceof EditNodeObject mapOwner
+                && mapOwner.getJsonType() != null
+                && mapOwner.getJsonType().getMappingAllFields() != null;
     }
 
     // ========== Annotations ==========
