@@ -34,5 +34,6 @@ public class CoreEditValidatorContributor implements ValidatorContributor {
         registry.addTreeValidator(new EditTreeModelConsistencyValidator());
         registry.addTreeValidator(new EditNodeRequiredFieldsValidator());
         registry.addTreeValidator(new EditNodeTypeHierarchyValidator());
+        registry.addTreeValidator(new WoodLinkValidator());
     }
 }
