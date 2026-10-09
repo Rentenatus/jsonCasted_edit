@@ -273,6 +273,23 @@ public final class EditLinkingSet {
         return references != null && !references.isEmpty();
     }
 
+    /**
+     * Connects each registered reference stub to its target: for every link target key the target object is looked up
+     * in the identity map and, when present, registered in the link map so findLinkTarget resolves it. Keys pointing at
+     * other providers stay unresolved here - a dangling link is a case for the validator, not for the import.
+     *
+     * Called after the whole tree is built, because a reference may precede its target in the document order.
+     */
+    public void resolveLinkTargets() {
+        for (Map.Entry<String, List<EditNodeObject>> entry : referencesByTarget.entrySet()) {
+            final EditNodeObject target = objectIdMap.get(entry.getKey());
+            if (target != null) {
+                linkMap.put(entry.getKey(), target);
+            }
+        }
+    }
+
+
 
     /**
      * Returns an unmodifiable view of the object ID map.
