@@ -519,6 +519,10 @@ public class EditTree {
             newNode.tryAssignType(jsonModelDescriptor);
         }
 
+        // Wood identities and references of the inserted subtree move into the
+        // linking set, so the set always points at the instances in the tree.
+        registerWoodLinks(newNode);
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
     }
@@ -540,6 +544,10 @@ public class EditTree {
             newNode.tryAssignType(jsonModelDescriptor);
         }
 
+        // Wood identities and references of the inserted subtree move into the
+        // linking set, so the set always points at the instances in the tree.
+        registerWoodLinks(newNode);
+
         // Notify parser listener about child addition
         notifyChildAdded(parentNode, newNode);
     }
@@ -555,6 +563,13 @@ public class EditTree {
     public boolean removeChild(EditNodeAbstract parentNode, EditNodeAbstract child) {
         checkParentProps(parentNode);
         boolean removed = parentNode.removeChild(child);
+
+        if (removed) {
+            // Delete is a tree operation: identities stay in the linking set (the object may hang in the air while
+            // references exist), only the stub pointers of the removed subtree leave the reverse index. An undo
+            // re-inserts a copy and registers it again.
+            unregisterWoodLinks(child);
+        }
 
         // Notify parser listener about child removal
         if (removed) {
@@ -717,6 +732,65 @@ public class EditTree {
      *
      * @return the linking set, or {@code null} if not set.
      */
+    /**
+     * Registers the wood identities and link references of a freshly inserted subtree in the linking set. Every
+     * command that inserts nodes (add, paste, undo of a delete, move) passes through addChild, so the identity map
+     * always points at the instances that live in the tree. Re-registering an identity rebinds it to the new
+     * instance - the undo of a delete inserts a deep copy, and the set must follow that copy.
+     *
+     * @param node the root of the inserted subtree
+     */
+    private void registerWoodLinks(EditNodeAbstract node) {
+        final EditLinkingSet linkingSet = getLinkingSet();
+        if (linkingSet == null) {
+            return;
+        }
+        walkWoodObjects(node, obj -> {
+            if (obj.getObjektId() != null && !obj.getObjektId().isEmpty()) {
+                linkingSet.registerObject(obj);
+            }
+            if (obj.isLinkReference()) {
+                linkingSet.registerLinkReference(obj);
+            }
+        });
+        linkingSet.resolveLinkTargets();
+    }
+
+    /**
+     * Removes the link reference stubs of a removed subtree from the reverse index. Object identities stay in the
+     * linking set - that is the holding space semantics of the delete.
+     *
+     * @param node the root of the removed subtree
+     */
+    private void unregisterWoodLinks(EditNodeAbstract node) {
+        final EditLinkingSet linkingSet = getLinkingSet();
+        if (linkingSet == null) {
+            return;
+        }
+        walkWoodObjects(node, obj -> {
+            if (obj.isLinkReference()) {
+                linkingSet.removeLinkReference(obj);
+            }
+        });
+    }
+
+    /**
+     * Visits every EditNodeObject of the given subtree.
+     *
+     * @param node the subtree root
+     * @param visitor the visitor to call for each object node
+     */
+    private static void walkWoodObjects(EditNodeAbstract node, java.util.function.Consumer<EditNodeObject> visitor) {
+        if (node instanceof EditNodeObject obj) {
+            visitor.accept(obj);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof EditNodeAbstract child) {
+                walkWoodObjects(child, visitor);
+            }
+        }
+    }
+
     public EditLinkingSet getLinkingSet() {
         return linkingSet;
     }
