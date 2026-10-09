@@ -31,6 +31,14 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile JsonTypeDescriptor jsonType;
 
     /**
+     * Wood link target of this node, extracted from the {@code TERM_WOOD_LINK} (_woodLink) entry during
+     * JSON-to-EditNode conversion. A node with a link target is a reference stub: it stands in for an object that
+     * lives elsewhere (in the tree or in the {@link EditLinkingSet} holding space) and carries no own field children.
+     * {@code null} means the node is not a reference.
+     */
+    private volatile String linkTarget;
+
+    /**
      * Cast name extracted from the {@code TERM_CLASS} (_class) entry during JSON-to-EditNode conversion. Serves as the
      * primary lookup key for type resolution in {@link #tryAssignType(JsonModelDescriptor)} so that the correct
      * substructure can be parsed even when the node name differs from the type name (e.g. node "config1" vs. type
@@ -159,6 +167,35 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setObjektId(String objektId) {
         this.objektId = objektId;
     }
+
+    /**
+     * Returns the wood link target of this node.
+     *
+     * @return the link target (e.g. "save::123"), or null when this node is not a reference stub
+     */
+    public String getLinkTarget() {
+        return linkTarget;
+    }
+
+    /**
+     * Sets the wood link target. A non-null link target turns this node into a reference stub.
+     *
+     * @param linkTarget the link target to set, or null to make this node a regular object node
+     */
+    public void setLinkTarget(String linkTarget) {
+        this.linkTarget = linkTarget;
+    }
+
+    /**
+     * Checks whether this node is a reference stub standing in for an object that lives elsewhere
+     * (in the tree or in the EditLinkingSet holding space).
+     *
+     * @return true when a link target is set
+     */
+    public boolean isLinkReference() {
+        return linkTarget != null && !linkTarget.isEmpty();
+    }
+
 
     /**
      * Returns the cast name for this node. This is the {@code TERM_CLASS} content extracted during JSON conversion, or
@@ -336,6 +373,8 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         }
         copy.setCastName(castName);
         copy.castInherited = castInherited;
+        copy.setObjektId(objektId);
+        copy.setLinkTarget(linkTarget);
         return copy;
     }
 
@@ -355,12 +394,12 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
     @Override
     public boolean canBeParentOfPropertyData() {
-        return true;
+        return !isLinkReference();
     }
 
     @Override
     public boolean canBeParentOfAnnotation() {
-        return true;
+        return !isLinkReference();
     }
 
     @Override
@@ -377,6 +416,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
         attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
         attributes.put("|cast inherited", new JackAttribut("cast inherited", isCastInherited()));
+        attributes.put("|linkTarget", new JackAttribut("linkTarget", getLinkTarget()));
         return putEditAttributes(attributes);
     }
 
@@ -408,6 +448,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut typeAttr = props.get("jsonType");
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
+        }
+        JackAttribut linkTargetAttr = props.get("|linkTarget");
+        if (linkTargetAttr != null) {
+            setLinkTarget((String) linkTargetAttr.getValue());
         }
         JackAttribut castNameAttr = props.get("|cast name");
         if (castNameAttr != null) {

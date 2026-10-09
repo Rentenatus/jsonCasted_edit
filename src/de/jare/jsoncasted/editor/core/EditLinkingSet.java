@@ -37,6 +37,13 @@ public final class EditLinkingSet {
     private Map<String, EditNodeObject> linkMap;
 
     /**
+     * Reverse index: link target (e.g. "save::123") to the reference stubs pointing at it. Keys are the
+     * link target strings exactly as stored on the referencing EditNodeObject instances, so a UI refresh or the
+     * validator can resolve all dependents of one object with a single lookup instead of filtering the link map.
+     */
+    private Map<String, List<EditNodeObject>> referencesByTarget;
+
+    /**
      * Constructs an EditLinkingSet for the specified provider.
      *
      * @param providerName the name of the provider this linking set belongs to.
@@ -45,6 +52,7 @@ public final class EditLinkingSet {
         this.providerName = providerName;
         this.objectIdMap = new LinkedHashMap<>();
         this.linkMap = new LinkedHashMap<>();
+        this.referencesByTarget = new LinkedHashMap<>();
     }
 
     /**
@@ -166,10 +174,16 @@ public final class EditLinkingSet {
             return false;
         }
         String objektId = editNode.getObjektId();
-        if (objektId != null && !objektId.isEmpty()) {
-            return objectIdMap.remove(providerName + COLONCOLON + objektId) != null;
+        if (objektId == null || objektId.isEmpty()) {
+            return false;
         }
-        return false;
+        // Final delete: the target leaves the identity map and its dependents follow - the referencesByTarget entry
+        // is removed with it, so a later lookup reports no references anymore. Link map entries pointing at the
+        // removed object are cleaned up as well.
+        final String qualifiedId = providerName + COLONCOLON + objektId;
+        referencesByTarget.remove(qualifiedId);
+        linkMap.values().removeIf(target -> target == editNode);
+        return objectIdMap.remove(qualifiedId) != null;
     }
 
     /**
@@ -184,6 +198,81 @@ public final class EditLinkingSet {
         }
         return linkMap.remove(link);
     }
+
+    /**
+     * Registers an EditNodeObject as a reference stub. The stub's link target is used as the reverse index key.
+     *
+     * @param reference the reference stub to register, must carry a link target.
+     * @return true when the stub was newly added to the reverse index.
+     * @throws NullPointerException if reference is null.
+     */
+    public boolean registerLinkReference(EditNodeObject reference) {
+        Objects.requireNonNull(reference, "reference must not be null");
+        final String target = reference.getLinkTarget();
+        if (target == null || target.isEmpty()) {
+            return false;
+        }
+        final List<EditNodeObject> references = referencesByTarget.computeIfAbsent(target, k -> new ArrayList<>());
+        if (references.contains(reference)) {
+            return false;
+        }
+        return references.add(reference);
+    }
+
+    /**
+     * Removes an EditNodeObject from the reverse index.
+     *
+     * @param reference the reference stub to remove.
+     * @return true when the stub was removed.
+     */
+    public boolean removeLinkReference(EditNodeObject reference) {
+        if (reference == null) {
+            return false;
+        }
+        final String target = reference.getLinkTarget();
+        if (target == null || target.isEmpty()) {
+            return false;
+        }
+        final List<EditNodeObject> references = referencesByTarget.get(target);
+        if (references == null) {
+            return false;
+        }
+        final boolean removed = references.remove(reference);
+        if (references.isEmpty()) {
+            referencesByTarget.remove(target);
+        }
+        return removed;
+    }
+
+    /**
+     * Returns all reference stubs pointing at the given link target. The final delete of a target object removes the
+     * entry, so an empty result means either no references or the target is gone.
+     *
+     * @param linkTarget the link target (e.g. "save::123").
+     * @return the referencing stubs, never null.
+     */
+    public List<EditNodeObject> getReferencesTo(String linkTarget) {
+        if (linkTarget == null) {
+            return List.of();
+        }
+        final List<EditNodeObject> references = referencesByTarget.get(linkTarget);
+        return references != null ? Collections.unmodifiableList(references) : List.of();
+    }
+
+    /**
+     * Checks whether any reference stub points at the given link target.
+     *
+     * @param linkTarget the link target (e.g. "save::123").
+     * @return true when at least one reference exists.
+     */
+    public boolean hasReferencesTo(String linkTarget) {
+        if (linkTarget == null) {
+            return false;
+        }
+        final List<EditNodeObject> references = referencesByTarget.get(linkTarget);
+        return references != null && !references.isEmpty();
+    }
+
 
     /**
      * Returns an unmodifiable view of the object ID map.
@@ -253,6 +342,7 @@ public final class EditLinkingSet {
     public void clear() {
         objectIdMap.clear();
         linkMap.clear();
+        referencesByTarget.clear();
     }
 
     @Override
@@ -261,6 +351,7 @@ public final class EditLinkingSet {
                 + "providerName='" + providerName + '\''
                 + ", objectIdMapSize=" + (objectIdMap != null ? objectIdMap.size() : 0)
                 + ", linkMapSize=" + (linkMap != null ? linkMap.size() : 0)
+                + ", referencesSize=" + (referencesByTarget != null ? referencesByTarget.size() : 0)
                 + '}';
     }
 }
