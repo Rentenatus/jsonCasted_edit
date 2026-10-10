@@ -76,10 +76,14 @@ public class EditStringEvaluatorNGTest {
     }
 
     @Test
-    public void testDisplayTextFallsBackToTheName() throws Exception {
-        final EditNodeObject node = rootNode(PROFILE_JSON);
+    public void testDisplayTextFallsBackToNameFieldAndNodeName() throws Exception {
+        final EditNodeObject profileNode = rootNode(PROFILE_JSON);
+        assertEquals(EditStringEvaluator.displayText(profileNode), "Alice",
+                "without a template the name field is the common fallback");
 
-        assertEquals(EditStringEvaluator.displayText(node), "root");
+        final EditNodeObject ownerNode = rootNode(OWNER_JSON);
+        assertEquals(EditStringEvaluator.displayText(ownerNode), "root",
+                "without a template and without a name field the object name remains");
     }
 
     @Test

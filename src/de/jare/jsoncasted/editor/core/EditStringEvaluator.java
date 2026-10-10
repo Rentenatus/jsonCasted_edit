@@ -45,7 +45,8 @@ public final class EditStringEvaluator {
 
     /**
      * Returns the display text of the object: the formatted editString template of its type when the type carries
-     * one, otherwise the plain object name. This is the fallback chain of the display side.
+     * one, otherwise the fallback chain of the display side - the value of a child property {@code name} (the
+     * common parameter), the wood object id, the plain object name.
      *
      * @param node the object node, may be null
      * @return the display text, never null
@@ -58,6 +59,16 @@ public final class EditStringEvaluator {
         final String template = type == null ? null : type.getEditString();
         if (template != null && !template.isBlank()) {
             return format(node, template);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof EditNodeProperty property
+                    && "name".equals(property.getName()) && property.getValue() != null) {
+                return property.getValue();
+            }
+        }
+        final String woodId = node.getObjektId();
+        if (woodId != null && !woodId.isEmpty()) {
+            return woodId;
         }
         return node.getName() == null ? "" : node.getName();
     }
