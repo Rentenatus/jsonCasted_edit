@@ -6,9 +6,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonNodeType;
-import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
-import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -19,8 +17,7 @@ import java.nio.file.Files;
 /**
  * Writes an {@link EditTree} back to wood JSON - the counterpart of {@link JsonTreeConverter}. Field level annotations
  * are flattened into their composite keys ({@code "@doc:profile"} at the object level), object level annotations keep
- * their simple keys. Transient annotations are skipped, but only when the declaration is loaded with the tree: without
- * a model descriptor nothing is filtered (annotation concept, decisions 8 and 9).
+ * their simple keys. Every annotation is persistent - nothing is filtered on save.
  *
  * @author Janusch Rentenatus
  */
@@ -228,7 +225,6 @@ public final class EditTreeWriter {
     /**
      * Writes the members of an object node (the root or an element object) in child order: field level annotations are
      * flattened to their composite key right before their field, object level annotations keep their position.
-     * Transient annotations are skipped when their declaration is loaded.
      */
     private static void writeObjectMembers(EditNodeObject node, int depth, StringBuilder sb) {
         boolean first = writeWoodMeta(node, depth, true, sb);
@@ -246,40 +242,19 @@ public final class EditTreeWriter {
     }
 
     /**
-     * Writes an object level annotation (simple key or orphan composite anchor) unless its declaration is transient.
+     * Writes an object level annotation (simple key or orphan composite anchor).
      */
     private static boolean writeObjectLevelAnnotation(EditNodeObject owner, EditNodeAnnotation ann, int depth,
             boolean first, StringBuilder sb) {
-        final String annName = ann.getAnnotationName();
-        final String target = ann.getTargetField();
-        final JsonTypeDescriptor ownerType = owner.getJsonType();
-        if (ownerType != null) {
-            if (target == null) {
-                if (isTransient(ownerType.getAnnotation(annName))) {
-                    return first;
-                }
-            } else {
-                final JsonFieldDescriptor targetField = ownerType.getField(target);
-                if (targetField != null && isTransient(targetField.getAnnotation(annName))) {
-                    return first;
-                }
-            }
-        }
         return writeProperty(ann, ann.getName(), ann.isComposite(), depth, first, sb);
     }
 
     /**
-     * Writes the annotation children of a field property as composite keys, unless their declaration for that field is
-     * transient.
+     * Writes the annotation children of a field property as composite keys.
      */
     private static boolean writeFieldAnnotations(EditNodeProperty fieldProp, int depth, boolean first, StringBuilder sb) {
         for (int i = 0; i < fieldProp.getChildCount(); i++) {
             if (!(fieldProp.getChildAt(i) instanceof EditNodeAnnotation ann)) {
-                continue;
-            }
-            final String annName = ann.getAnnotationName();
-            final JsonFieldDescriptor field = fieldProp.getJsonField();
-            if (field != null && isTransient(field.getAnnotation(annName))) {
                 continue;
             }
             // The composite target is structural: the display name of the
@@ -462,13 +437,6 @@ public final class EditTreeWriter {
             return true;
         }
         return value.matches("-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?");
-    }
-
-    /**
-     * Checks whether the given declared annotation is transient.
-     */
-    private static boolean isTransient(de.jare.jsoncasted.model.item.JsonAnnotation declared) {
-        return declared != null && declared.isTransient();
     }
 
     /**

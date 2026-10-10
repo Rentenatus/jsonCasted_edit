@@ -11,7 +11,7 @@ import static org.testng.Assert.*;
 import org.testng.annotations.Test;
 
 /**
- * Tests for {@link EditTreeWriter}: field level annotations are flattened into their composite keys, transient
+ * Tests for {@link EditTreeWriter}: field level annotations are flattened into their composite keys, every
  * annotations are filtered when their declaration is loaded, scalars keep their JSON type and the written string
  * reloads into an equivalent tree.
  *
@@ -20,11 +20,11 @@ import org.testng.annotations.Test;
 public class EditTreeWriterNGTest {
 
     /**
-     * Field annotations flatten into their composite key right before their field, object annotations keep their simple
-     * key, and transient annotations disappear from the output when the declaration is loaded.
+     * Field annotations flatten into their composite key right before their field, object annotations keep their
+     * simple key, and every annotation is written - nothing is filtered on save.
      */
     @Test
-    public void testCompositeFlatteningAndTransientFilter() throws Exception {
+    public void testCompositeFlatteningAndPersistence() throws Exception {
         final EditTree tree = buildAnnotatedTree();
         final String json = EditTreeWriter.toJsonString(tree);
 
@@ -33,7 +33,7 @@ public class EditTreeWriterNGTest {
                 "The field annotation is flattened to its composite key: " + json);
         assertTrue(json.indexOf("\"@doc:comments\"") < json.indexOf("comments: ["),
                 "The composite key is written before its field: " + json);
-        assertFalse(json.contains("@javadoc"), "The transient annotation is filtered on save: " + json);
+        assertTrue(json.contains("@javadoc"), "Every annotation is persistent, nothing is filtered on save: " + json);
         assertFalse(json.contains("hint\""), "Simple keys stay unquoted: " + json);
     }
 
@@ -89,13 +89,13 @@ public class EditTreeWriterNGTest {
 
     // ========== Helpers ==========
     /**
-     * Builds a tree with a declared object annotation (hint), a transient object annotation (javadoc) and a field
+     * Builds a tree with a declared object annotation (hint), a free object annotation (javadoc) and a field
      * annotation (doc on comments), bound against a fresh Config definition with exactly these declarations.
      */
     private static EditTree buildAnnotatedTree() throws InterruptedException {
         final JsonConfigDefinition definition = new JsonConfigDefinition();
         definition.getRootClass().addAnnotation("hint");
-        definition.getRootClass().addAnnotation("javadoc", true);
+        definition.getRootClass().addAnnotation("javadoc");
         definition.getRootClass().getField("comments").addAnnotation("doc");
 
         final EditNodeObject root = new EditNodeObject("seedConfig");
