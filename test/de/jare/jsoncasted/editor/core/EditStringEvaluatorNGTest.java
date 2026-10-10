@@ -67,12 +67,41 @@ public class EditStringEvaluatorNGTest {
         return type;
     }
 
+    private static JsonTypeDescriptor typeWithDeclaredEditString(String template) {
+        final JsonTypeDescriptor type = new JsonTypeDescriptor("profile");
+        type.addAnnotation(de.jare.jsoncasted.model.item.JsonAnnotation.editString(template));
+        return type;
+    }
+
     @Test
     public void testDisplayTextFormatsTheTemplate() throws Exception {
         final EditNodeObject node = rootNode(PROFILE_JSON);
         node.setJsonType(typeWithEditString("${name} (${typ})"));
 
         assertEquals(EditStringEvaluator.displayText(node), "Alice (admin)");
+    }
+
+    /**
+     * The declaration value (model world, decision 13) is the primary source of the template - the adopted
+     * @editString entry of a hand edited description file only serves models that never declared the value.
+     */
+    @Test
+    public void testDeclarationValueWinsOverTheAdoptedEntry() throws Exception {
+        final EditNodeObject node = rootNode(PROFILE_JSON);
+        final JsonTypeDescriptor type = typeWithDeclaredEditString("${name} [${typ}]");
+        type.setEditString("${name} (${typ})"); // the adopted fallback form
+        node.setJsonType(type);
+
+        assertEquals(EditStringEvaluator.displayText(node), "Alice [admin]",
+                "the model declaration beats the modeling side adoption");
+    }
+
+    @Test
+    public void testDeclaredValueAloneIsTheTemplate() throws Exception {
+        final EditNodeObject node = rootNode(PROFILE_JSON);
+        node.setJsonType(typeWithDeclaredEditString("${typ|upper}: ${name}"));
+
+        assertEquals(EditStringEvaluator.displayText(node), "ADMIN: Alice");
     }
 
     @Test

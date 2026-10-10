@@ -6,6 +6,7 @@
 package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
+import de.jare.jsoncasted.model.item.JsonAnnotation;
 import java.text.DecimalFormat;
 
 /**
@@ -56,7 +57,7 @@ public final class EditStringEvaluator {
             return "";
         }
         final JsonTypeDescriptor type = node.getJsonType();
-        final String template = type == null ? null : type.getEditString();
+        final String template = templateOf(type);
         if (template != null && !template.isBlank()) {
             return format(node, template);
         }
@@ -71,6 +72,26 @@ public final class EditStringEvaluator {
             return woodId;
         }
         return node.getName() == null ? "" : node.getName();
+    }
+
+    /**
+     * Derives the effective editString template of the type (annotation concept, decision 13): the declaration value
+     * on the type's editString annotation wins - the model is the source of truth - and the adopted
+     * {@code @editString} entry of a hand edited description file (JsonTypeDescriptor.getEditString) stays the
+     * fallback for models that never declared the value.
+     *
+     * @param type the type descriptor of the displayed object, may be null
+     * @return the effective template, or {@code null} when the type has none
+     */
+    private static String templateOf(JsonTypeDescriptor type) {
+        if (type == null) {
+            return null;
+        }
+        final JsonAnnotation declared = type.getAnnotation(JsonAnnotation.EDIT_STRING);
+        if (declared != null && declared.getValue() != null && !declared.getValue().isBlank()) {
+            return declared.getValue();
+        }
+        return type.getEditString();
     }
 
     /**
