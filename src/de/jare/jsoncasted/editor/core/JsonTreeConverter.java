@@ -119,13 +119,13 @@ public final class JsonTreeConverter {
         if (descriptionFile != null) {
             try {
                 JsonModelDescriptorDefinition definition = JsonModelDescriptorDefinition.getInstance();
-                // One raw parse serves both: the cast based build (blind for @ keys) and the editString adoption,
-                // which walks the raw node tree because the templates live in @editString entries.
+                // One raw parse serves both: the cast based build (blind for @ keys) and the annotation value
+                // adoption, which walks the raw node tree because declaration values live in @ key entries.
                 JsonResource rawResource = JsonParserService.parse(descriptionFile, JsonDebugLevel.SIMPLE);
                 WoodResolution resolution = JsonParser.parse(rawResource, definition.getDescriptor(),
                         definition.getRootClass().getcName(), JsonDebugLevel.SIMPLE);
                 descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
-                descriptor.adoptEditStrings(rawResource.getRoot());
+                descriptor.adoptAnnotationValues(rawResource.getRoot());
             } catch (JsonParseException | JsonBuildException | IOException | NullPointerException | ClassCastException ex) {
                 final String failedMsg = "Load JsonModelDescriptor failed. ";
                 Logger.getGlobal().log(Level.SEVERE, failedMsg, ex);

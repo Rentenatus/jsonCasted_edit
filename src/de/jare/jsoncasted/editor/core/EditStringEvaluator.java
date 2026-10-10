@@ -76,9 +76,8 @@ public final class EditStringEvaluator {
 
     /**
      * Derives the effective editString template of the type (annotation concept, decision 13): the declaration value
-     * on the type's editString annotation wins - the model is the source of truth - and the adopted
-     * {@code @editString} entry of a hand edited description file (JsonTypeDescriptor.getEditString) stays the
-     * fallback for models that never declared the value.
+     * on the type's editString annotation is the single source - filled by describeHead from the model or by the
+     * raw adoption of a hand edited description file.
      *
      * @param type the type descriptor of the displayed object, may be null
      * @return the effective template, or {@code null} when the type has none
@@ -88,10 +87,7 @@ public final class EditStringEvaluator {
             return null;
         }
         final JsonAnnotation declared = type.getAnnotation(JsonAnnotation.EDIT_STRING);
-        if (declared != null && declared.getValue() != null && !declared.getValue().isBlank()) {
-            return declared.getValue();
-        }
-        return type.getEditString();
+        return declared == null ? null : declared.getValue();
     }
 
     /**

@@ -63,12 +63,6 @@ public class EditStringEvaluatorNGTest {
 
     private static JsonTypeDescriptor typeWithEditString(String template) {
         final JsonTypeDescriptor type = new JsonTypeDescriptor("profile");
-        type.setEditString(template);
-        return type;
-    }
-
-    private static JsonTypeDescriptor typeWithDeclaredEditString(String template) {
-        final JsonTypeDescriptor type = new JsonTypeDescriptor("profile");
         type.addAnnotation(de.jare.jsoncasted.model.item.JsonAnnotation.editString(template));
         return type;
     }
@@ -79,29 +73,6 @@ public class EditStringEvaluatorNGTest {
         node.setJsonType(typeWithEditString("${name} (${typ})"));
 
         assertEquals(EditStringEvaluator.displayText(node), "Alice (admin)");
-    }
-
-    /**
-     * The declaration value (model world, decision 13) is the primary source of the template - the adopted
-     * @editString entry of a hand edited description file only serves models that never declared the value.
-     */
-    @Test
-    public void testDeclarationValueWinsOverTheAdoptedEntry() throws Exception {
-        final EditNodeObject node = rootNode(PROFILE_JSON);
-        final JsonTypeDescriptor type = typeWithDeclaredEditString("${name} [${typ}]");
-        type.setEditString("${name} (${typ})"); // the adopted fallback form
-        node.setJsonType(type);
-
-        assertEquals(EditStringEvaluator.displayText(node), "Alice [admin]",
-                "the model declaration beats the modeling side adoption");
-    }
-
-    @Test
-    public void testDeclaredValueAloneIsTheTemplate() throws Exception {
-        final EditNodeObject node = rootNode(PROFILE_JSON);
-        node.setJsonType(typeWithDeclaredEditString("${typ|upper}: ${name}"));
-
-        assertEquals(EditStringEvaluator.displayText(node), "ADMIN: Alice");
     }
 
     @Test
@@ -140,7 +111,7 @@ public class EditStringEvaluatorNGTest {
     public void testObjectFieldUsesRecursiveDisplay() throws Exception {
         final EditNodeObject node = rootNode(OWNER_JSON);
         final JsonTypeDescriptor ownerType = new JsonTypeDescriptor("ownerType");
-        ownerType.setEditString("${name}");
+        ownerType.addAnnotation(de.jare.jsoncasted.model.item.JsonAnnotation.editString("${name}"));
         for (int i = 0; i < node.getChildCount(); i++) {
             if (node.getChildAt(i) instanceof EditNodeProperty owner) {
                 for (int j = 0; j < owner.getChildCount(); j++) {
@@ -166,9 +137,12 @@ public class EditStringEvaluatorNGTest {
 
         final var descriptor = tree.getJsonModelDescriptor();
         assertNotNull(descriptor, "the description must load into a descriptor");
-        assertEquals(descriptor.getType("profile").getEditString(), "${name} (${typ})",
-                "a single element @editString is adopted while loading");
-        assertNull(descriptor.getType("broken").getEditString(),
-                "a multi element @editString is invalid and stays unadopted - the validator reports it");
+        assertEquals(descriptor.getType("profile")
+                        .getAnnotation(de.jare.jsoncasted.model.item.JsonAnnotation.EDIT_STRING).getValue(),
+                "${name} (${typ})", "a single element @editString is adopted while loading");
+        assertEquals(descriptor.getType("broken")
+                        .getAnnotation(de.jare.jsoncasted.model.item.JsonAnnotation.EDIT_STRING).getValue(),
+                "${a}\n${b}",
+                "a multi element @editString joins line by line - the validator reports it as invalid");
     }
 }
