@@ -27,7 +27,6 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
     private String objektValue;
     private String objektInfo;
-    private String objektId;
     private volatile JsonTypeDescriptor jsonType;
 
     /**
@@ -140,24 +139,6 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
      */
     public void setObjektInfo(String objektInfo) {
         this.objektInfo = objektInfo;
-    }
-
-    /**
-     * Returns the object ID for this node.
-     *
-     * @return the objektId
-     */
-    public String getObjektId() {
-        return objektId;
-    }
-
-    /**
-     * Sets the object ID for this node.
-     *
-     * @param objektId the object ID to set
-     */
-    public void setObjektId(String objektId) {
-        this.objektId = objektId;
     }
 
     /**
@@ -336,6 +317,8 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         }
         copy.setCastName(castName);
         copy.castInherited = castInherited;
+        copy.setObjektId(getObjektId());
+        copy.setLinkTarget(getLinkTarget());
         return copy;
     }
 
@@ -355,12 +338,12 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
 
     @Override
     public boolean canBeParentOfPropertyData() {
-        return true;
+        return !isLinkReference();
     }
 
     @Override
     public boolean canBeParentOfAnnotation() {
-        return true;
+        return !isLinkReference();
     }
 
     @Override
@@ -377,6 +360,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         attributes.put("jsonType", new JackAttribut("jsonType", getJsonType()));
         attributes.put("|cast name", new JackAttribut("cast name", getCastName()));
         attributes.put("|cast inherited", new JackAttribut("cast inherited", isCastInherited()));
+        attributes.put("|linkTarget", new JackAttribut("linkTarget", getLinkTarget()));
         return putEditAttributes(attributes);
     }
 
@@ -408,6 +392,10 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         JackAttribut typeAttr = props.get("jsonType");
         if (typeAttr != null) {
             setJsonType((JsonTypeDescriptor) typeAttr.getValue());
+        }
+        JackAttribut linkTargetAttr = props.get("|linkTarget");
+        if (linkTargetAttr != null) {
+            setLinkTarget((String) linkTargetAttr.getValue());
         }
         JackAttribut castNameAttr = props.get("|cast name");
         if (castNameAttr != null) {

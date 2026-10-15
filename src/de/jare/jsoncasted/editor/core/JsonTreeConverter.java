@@ -119,8 +119,13 @@ public final class JsonTreeConverter {
         if (descriptionFile != null) {
             try {
                 JsonModelDescriptorDefinition definition = JsonModelDescriptorDefinition.getInstance();
-                WoodResolution resolution = JsonParser.parse(descriptionFile, definition, definition.getRootClass());
+                // One raw parse serves both: the cast based build (blind for @ keys) and the annotation value
+                // adoption, which walks the raw node tree because declaration values live in @ key entries.
+                JsonResource rawResource = JsonParserService.parse(descriptionFile, JsonDebugLevel.SIMPLE);
+                WoodResolution resolution = JsonParser.parse(rawResource, definition.getDescriptor(),
+                        definition.getRootClass().getcName(), JsonDebugLevel.SIMPLE);
                 descriptor = (JsonModelDescriptor) JsonBuilder.buildInstance(definition.getModel(), false, resolution.getAnswer());
+                descriptor.adoptAnnotationValues(rawResource.getRoot());
             } catch (JsonParseException | JsonBuildException | IOException | NullPointerException | ClassCastException ex) {
                 final String failedMsg = "Load JsonModelDescriptor failed. ";
                 Logger.getGlobal().log(Level.SEVERE, failedMsg, ex);
@@ -170,8 +175,28 @@ public final class JsonTreeConverter {
      */
     public static EditTree convertRessourceToEditTree(JsonResource resource, String rootName) throws JsonParseException {
         EditTimes weightMonitor = new EditTimes();
-        EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor);
-        return new EditTree(root, weightMonitor);
+        final EditLinkingSet linkingSet = new EditLinkingSet(resolveProviderName(resource));
+        EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor, linkingSet);
+        EditTree tree = new EditTree(root, weightMonitor);
+        tree.setLinkingSet(linkingSet);
+        return tree;
+    }
+
+    /**
+     * Derives the provider name for the linking set from the resource: the same synonym normalization as the display
+     * root name, because the set qualifies object ids with this prefix and must match the provider prefixes used in
+     * the file's _woodLink entries.
+     *
+     * @param resource the parsed JSON resource
+     * @return the provider name, or {@code this} when the resource has none
+     */
+    private static String resolveProviderName(JsonResource resource) {
+        String providerName = resource.getProviderName();
+        if (providerName == null || providerName.isBlank()
+                || JsonTerms.SELF_SYNONYM.equals(providerName)) {
+            return JsonTerms.THIS_SYNONYM;
+        }
+        return providerName;
     }
 
     /**
@@ -184,11 +209,30 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during import
      */
     public static EditNodeAbstract importFromJsonNode(JsonNode jsonNode, String rootName, EditTimes weightMonitor) throws JsonParseException {
+        return importFromJsonNode(jsonNode, rootName, weightMonitor, null);
+    }
+
+    /**
+     * Imports a JSON node into an EditNode structure, registering wood identities and references in the given
+     * linking set. The set may be null for callers that do not need link tracking.
+     *
+     * @param jsonNode the JSON node to import
+     * @param rootName the name to use for the root node
+     * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
+     * @param linkingSet the linking set collecting identities and references, or null
+     * @return the root EditNode containing the imported JSON structure
+     * @throws JsonParseException if JSON parsing fails during import
+     */
+    public static EditNodeAbstract importFromJsonNode(JsonNode jsonNode, String rootName, EditTimes weightMonitor,
+            EditLinkingSet linkingSet) throws JsonParseException {
         if (jsonNode == null) {
             throw new IllegalArgumentException("Node cannot be null");
         }
         EditNodeObject rootNode = new EditNodeObject(rootName);
-        convertJsonNodeToEditNode(rootNode, jsonNode, weightMonitor);
+        convertJsonNodeToEditNode(rootNode, jsonNode, weightMonitor, linkingSet);
+        if (linkingSet != null) {
+            linkingSet.resolveLinkTargets();
+        }
         return rootNode;
     }
 
@@ -207,7 +251,8 @@ public final class JsonTreeConverter {
      * @param weightMonitor the EditTimes monitor for tracking tree construction metrics
      * @throws JsonParseException if JSON parsing fails during conversion
      */
-    private static void convertJsonNodeToEditNode(EditNodeObject rootNode, JsonNode jsonNode, EditTimes weightMonitor) throws JsonParseException {
+    private static void convertJsonNodeToEditNode(EditNodeObject rootNode, JsonNode jsonNode, EditTimes weightMonitor,
+            EditLinkingSet linkingSet) throws JsonParseException {
         Map<String, JsonNode> objectValues = jsonNode.asObjectValues();
         List<Map.Entry<String, JsonNode>> deferredAnnotations = null;
         if (objectValues != null) {
@@ -228,6 +273,28 @@ public final class JsonTreeConverter {
                             }
                         }
                     }
+                    // Wood identity: the node keeps the raw id text and registers itself in the linking set, which
+                    // qualifies the id with its provider name.
+                    if (TERM_WOOD_OBJECT_ID.equals(key)) {
+                        String rawId = readText(entry.getValue());
+                        if (rawId != null && !rawId.isEmpty()) {
+                            rootNode.setObjektId(rawId);
+                            if (linkingSet != null) {
+                                linkingSet.registerObject(rootNode);
+                            }
+                        }
+                    }
+                    // Wood reference: the node becomes a reference stub. The link key is normalized like the
+                    // parser does (this::/self:: is resolved against the provider of the linking set).
+                    if (TERM_WOOD_LINK.equals(key)) {
+                        String normalized = readLinkTarget(entry.getValue(), linkingSet);
+                        if (normalized != null && !normalized.isEmpty()) {
+                            rootNode.setLinkTarget(normalized);
+                            if (linkingSet != null) {
+                                linkingSet.registerLinkReference(rootNode);
+                            }
+                        }
+                    }
                     continue;
                 }
                 if (AnnotationKeys.isCompositeKey(key)) {
@@ -240,12 +307,12 @@ public final class JsonTreeConverter {
                     deferredAnnotations.add(entry);
                     continue;
                 }
-                buildEditProperty(rootNode, entry, weightMonitor);
+                buildEditProperty(rootNode, entry, weightMonitor, linkingSet);
             }
         }
         if (deferredAnnotations != null) {
             for (Map.Entry<String, JsonNode> entry : deferredAnnotations) {
-                resolveCompositeAnnotation(rootNode, entry, weightMonitor);
+                resolveCompositeAnnotation(rootNode, entry, weightMonitor, linkingSet);
             }
         }
     }
@@ -275,8 +342,8 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during property construction
      */
     private static void buildEditProperty(EditNodeObject parent, Map.Entry<String, JsonNode> entry,
-            EditTimes weightMonitor) throws JsonParseException {
-        buildEditProperty(parent, entry.getKey(), entry, weightMonitor);
+            EditTimes weightMonitor, EditLinkingSet linkingSet) throws JsonParseException {
+        buildEditProperty(parent, entry.getKey(), entry, weightMonitor, linkingSet);
     }
 
     /**
@@ -290,7 +357,7 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during property construction
      */
     private static void buildEditProperty(EditNodeAbstract parent, String propertyName, Map.Entry<String, JsonNode> entry,
-            EditTimes weightMonitor) throws JsonParseException {
+            EditTimes weightMonitor, EditLinkingSet linkingSet) throws JsonParseException {
         // An @ key is an annotation: the node class carries the kind, the
         // name stays plain and the composite target is kept as its own field.
         final EditNodeProperty editNode = AnnotationKeys.isAnnotationKey(propertyName)
@@ -301,16 +368,17 @@ public final class JsonTreeConverter {
         JsonNodeType type = jsonNode.getType();
         editNode.setType(type);
         if (type == JsonNodeType.ARRAY) {
+            transferArrayIdentity(editNode, jsonNode, linkingSet);
             List<JsonNode> arrayValues = jsonNode.asArray();
             if (arrayValues != null) {
                 for (JsonNode value : arrayValues) {
-                    buildEditObject(editNode, value, weightMonitor);
+                    buildEditObject(editNode, value, weightMonitor, linkingSet);
                 }
             }
             return;
         }
         if (type == JsonNodeType.OBJECT) {
-            buildEditObject(editNode, jsonNode, weightMonitor);
+            buildEditObject(editNode, jsonNode, weightMonitor, linkingSet);
             return;
         }
         editNode.setValue(convertJsonValueToString(jsonNode));
@@ -327,16 +395,16 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during property construction
      */
     private static void resolveCompositeAnnotation(EditNodeObject parent, Map.Entry<String, JsonNode> entry,
-            EditTimes weightMonitor) throws JsonParseException {
+            EditTimes weightMonitor, EditLinkingSet linkingSet) throws JsonParseException {
         final String target = AnnotationKeys.targetField(entry.getKey());
         for (int i = 0; i < parent.getChildCount(); i++) {
             final EditNode child = parent.getChildAt(i);
             if (child instanceof EditNodeProperty fieldProp && target.equals(child.getName())) {
-                buildEditProperty(fieldProp, entry.getKey(), entry, weightMonitor);
+                buildEditProperty(fieldProp, entry.getKey(), entry, weightMonitor, linkingSet);
                 return;
             }
         }
-        buildEditProperty(parent, entry, weightMonitor);
+        buildEditProperty(parent, entry, weightMonitor, linkingSet);
     }
 
     /**
@@ -349,28 +417,49 @@ public final class JsonTreeConverter {
      * @throws JsonParseException if JSON parsing fails during construction
      */
     private static void buildEditObject(EditNodeProperty parent, JsonNode jsonNode,
-            EditTimes weightMonitor) throws JsonParseException {
+            EditTimes weightMonitor, EditLinkingSet linkingSet) throws JsonParseException {
         JsonNodeType type = jsonNode.getType();
 
         if (type == JsonNodeType.OBJECT) {
             EditNodeObject ndoeObject = new EditNodeObject("Object", "{...}");
-            convertJsonNodeToEditNode(ndoeObject, jsonNode, weightMonitor);
+            convertJsonNodeToEditNode(ndoeObject, jsonNode, weightMonitor, linkingSet);
             parent.addChild(ndoeObject, weightMonitor);
             return;
         }
         if (type == JsonNodeType.ARRAY) {
             EditNodePropertyArr nodeArray = new EditNodePropertyArr();
             parent.addChild(nodeArray, weightMonitor);
+            transferArrayIdentity(nodeArray, jsonNode, linkingSet);
             List<JsonNode> arrayValues = jsonNode.asArray();
             if (arrayValues != null) {
                 for (JsonNode value : arrayValues) {
-                    buildEditObject(nodeArray, value, weightMonitor);
+                    buildEditObject(nodeArray, value, weightMonitor, linkingSet);
                 }
             }
             return;
         }
         EditNodeObject nodePrimitiv = new EditNodeObject(jsonNode.toText());
         parent.addChild(nodePrimitiv, weightMonitor);
+    }
+
+    /**
+     * Transfers the wood identity of an array JSON node onto the edit node: the id of the {@code <"id">[...]}
+     * notation becomes the objektId of the array property, and the node registers itself in the linking set so
+     * reference stubs can resolve against it.
+     *
+     * @param editNode the edit node receiving the identity
+     * @param jsonNode the array JSON node carrying the identity
+     * @param linkingSet the linking set collecting identities, or null
+     */
+    private static void transferArrayIdentity(EditNodeAbstract editNode, JsonNode jsonNode, EditLinkingSet linkingSet) {
+        final String rawId = jsonNode.getWoodObjectId();
+        if (rawId == null || rawId.isEmpty()) {
+            return;
+        }
+        editNode.setObjektId(rawId);
+        if (linkingSet != null) {
+            linkingSet.registerObject(editNode);
+        }
     }
 
     /**
@@ -400,5 +489,39 @@ public final class JsonTreeConverter {
             return null;
         }
         return jsonNode.asText();
+    }
+
+    /**
+     * Reads the raw text of a metadata value node (wood object id or link).
+     *
+     * @param valueNode the metadata value node
+     * @return the raw text, or null when the node is absent or JSON null
+     */
+    private static String readText(JsonNode valueNode) throws JsonParseException {
+        return valueNode == null || valueNode.isNull() ? null : valueNode.toText();
+    }
+
+    /**
+     * Normalizes a _woodLink value the same way the parser does: this:: and self:: prefixes are resolved against
+     * the provider name of the linking set, an explicit provider prefix stays as it is. Without a linking set the
+     * raw link is returned unchanged.
+     *
+     * @param valueNode the _woodLink value node
+     * @param linkingSet the linking set providing the provider name, may be null
+     * @return the normalized link key, or null when no link text is present
+     */
+    private static String readLinkTarget(JsonNode valueNode, EditLinkingSet linkingSet) throws JsonParseException {
+        final String link = readText(valueNode);
+        if (link == null || link.isEmpty()) {
+            return null;
+        }
+        if (linkingSet == null) {
+            return link;
+        }
+        if (link.startsWith(JsonTerms.PREFIX_THIS) || link.startsWith(JsonTerms.PREFIX_SELF)) {
+            final int splitAt = link.indexOf(JsonTerms.COLONCOLON) + JsonTerms.COLONCOLON.length();
+            return linkingSet.getProviderName() + JsonTerms.COLONCOLON + link.substring(splitAt);
+        }
+        return link;
     }
 }
