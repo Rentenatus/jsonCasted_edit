@@ -368,6 +368,7 @@ public final class JsonTreeConverter {
         JsonNodeType type = jsonNode.getType();
         editNode.setType(type);
         if (type == JsonNodeType.ARRAY) {
+            transferArrayIdentity(editNode, jsonNode, linkingSet);
             List<JsonNode> arrayValues = jsonNode.asArray();
             if (arrayValues != null) {
                 for (JsonNode value : arrayValues) {
@@ -428,6 +429,7 @@ public final class JsonTreeConverter {
         if (type == JsonNodeType.ARRAY) {
             EditNodePropertyArr nodeArray = new EditNodePropertyArr();
             parent.addChild(nodeArray, weightMonitor);
+            transferArrayIdentity(nodeArray, jsonNode, linkingSet);
             List<JsonNode> arrayValues = jsonNode.asArray();
             if (arrayValues != null) {
                 for (JsonNode value : arrayValues) {
@@ -438,6 +440,26 @@ public final class JsonTreeConverter {
         }
         EditNodeObject nodePrimitiv = new EditNodeObject(jsonNode.toText());
         parent.addChild(nodePrimitiv, weightMonitor);
+    }
+
+    /**
+     * Transfers the wood identity of an array JSON node onto the edit node: the id of the {@code <"id">[...]}
+     * notation becomes the objektId of the array property, and the node registers itself in the linking set so
+     * reference stubs can resolve against it.
+     *
+     * @param editNode the edit node receiving the identity
+     * @param jsonNode the array JSON node carrying the identity
+     * @param linkingSet the linking set collecting identities, or null
+     */
+    private static void transferArrayIdentity(EditNodeAbstract editNode, JsonNode jsonNode, EditLinkingSet linkingSet) {
+        final String rawId = jsonNode.getWoodObjectId();
+        if (rawId == null || rawId.isEmpty()) {
+            return;
+        }
+        editNode.setObjektId(rawId);
+        if (linkingSet != null) {
+            linkingSet.registerObject(editNode);
+        }
     }
 
     /**

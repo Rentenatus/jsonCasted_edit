@@ -62,8 +62,8 @@ public class WoodLinkValidator implements EditTreeValidator {
         }
 
         // Held objects without references are cleanup candidates: the export drops them anyway.
-        for (Map.Entry<String, EditNodeObject> entry : linkingSet.getObjectIdMap().entrySet()) {
-            final EditNodeObject held = entry.getValue();
+        for (Map.Entry<String, EditNodeAbstract> entry : linkingSet.getObjectIdMap().entrySet()) {
+            final EditNodeAbstract held = entry.getValue();
             if (held == null || visited.contains(held)) {
                 continue;
             }

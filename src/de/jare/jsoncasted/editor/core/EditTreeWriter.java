@@ -121,9 +121,9 @@ public final class EditTreeWriter {
         final java.util.Set<EditNodeAbstract> reachable = new java.util.HashSet<>();
         collectReachable(tree.getRoot(), reachable);
 
-        final List<EditNodeObject> detached = new java.util.ArrayList<>();
-        for (Map.Entry<String, EditNodeObject> entry : linkingSet.getObjectIdMap().entrySet()) {
-            final EditNodeObject candidate = entry.getValue();
+        final List<EditNodeAbstract> detached = new java.util.ArrayList<>();
+        for (Map.Entry<String, EditNodeAbstract> entry : linkingSet.getObjectIdMap().entrySet()) {
+            final EditNodeAbstract candidate = entry.getValue();
             if (candidate == null || reachable.contains(candidate)) {
                 continue;
             }
@@ -138,9 +138,16 @@ public final class EditTreeWriter {
 
         sb.append(INDENT).append("\"_woodDefinitions\": [\n");
         boolean first = true;
-        for (EditNodeObject obj : detached) {
+        for (EditNodeAbstract node : detached) {
             if (!first) {
                 sb.append(",\n");
+            }
+            if (!(node instanceof EditNodeObject obj)) {
+                // a detached array definition keeps its <"id">[...] notation
+                sb.append(INDENT);
+                writeElement(node, 1, sb);
+                first = false;
+                continue;
             }
             sb.append(INDENT).append("{ ");
             boolean memberFirst = true;
@@ -196,7 +203,7 @@ public final class EditTreeWriter {
      */
     private static boolean isReferencedFromTree(EditLinkingSet linkingSet, String linkTarget,
             java.util.Set<EditNodeAbstract> reachable) {
-        for (EditNodeObject reference : linkingSet.getReferencesTo(linkTarget)) {
+        for (EditNodeAbstract reference : linkingSet.getReferencesTo(linkTarget)) {
             if (reachable.contains(reference)) {
                 return true;
             }
@@ -285,6 +292,7 @@ public final class EditTreeWriter {
     private static void writeValue(EditNodeProperty prop, int depth, StringBuilder sb) {
         final JsonNodeType type = prop.getType();
         if (type == JsonNodeType.ARRAY) {
+            writeWoodIdNotation(prop.getObjektId(), sb);
             sb.append("[\n");
             boolean first = true;
             for (int i = 0; i < prop.getChildCount(); i++) {
@@ -332,10 +340,27 @@ public final class EditTreeWriter {
     }
 
     /**
+     * Writes the wood id notation in angle brackets in front of a literal, e.g. {@code <"7">}: the identity of an
+     * array that is shared between several fields. A null or empty id writes nothing.
+     *
+     * @param rawId the raw id text of the array identity
+     * @param sb the target buffer
+     */
+    private static void writeWoodIdNotation(String rawId, StringBuilder sb) {
+        if (rawId == null || rawId.isEmpty()) {
+            return;
+        }
+        sb.append('<').append('"');
+        escape(rawId, sb);
+        sb.append('"').append('>');
+    }
+
+    /**
      * Writes one array element: a nested array, an object or a scalar row.
      */
     private static void writeElement(EditNodeAbstract elem, int depth, StringBuilder sb) {
         if (elem instanceof EditNodePropertyArr arr) {
+            writeWoodIdNotation(arr.getObjektId(), sb);
             sb.append("[\n");
             boolean first = true;
             for (int i = 0; i < arr.getChildCount(); i++) {
@@ -357,6 +382,12 @@ public final class EditTreeWriter {
             return;
         }
         if (elem instanceof EditNodeObject obj) {
+            if (obj.isLinkReference() && obj.getChildCount() == 0) {
+                sb.append('<').append('"');
+                escape(obj.getLinkTarget(), sb);
+                sb.append('"').append('>');
+                return;
+            }
             if (obj.getChildCount() == 0 && !obj.isLinkReference() && obj.getObjektId() == null) {
                 writeRowValue(obj, sb);
                 return;

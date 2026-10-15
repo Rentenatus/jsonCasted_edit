@@ -405,6 +405,8 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
             copy.addChildPhase1(deepCopy, copy.getChildCount());
             copy.addChildPhase2Fast(deepCopy);
         }
+        copy.setObjektId(getObjektId());
+        copy.setLinkTarget(getLinkTarget());
         return copy;
     }
 
