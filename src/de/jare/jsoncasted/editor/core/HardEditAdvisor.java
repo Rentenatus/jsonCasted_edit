@@ -99,6 +99,49 @@ public final class HardEditAdvisor {
     }
 
     /**
+     * Computes the permissible new names for a rename of the given node in hard mode: ALL
+     * declared fields of the owning object's type - constructor params and fields, the
+     * supertype chain included - also the ones a sibling already carries (the parser
+     * judges the result, a duplicate name is its verdict). A node without a typed parent,
+     * a pass-through array wrapper (it routes content only) and an unknown model offer
+     * nothing - the rename stays refused there.
+     *
+     * @param node the node being renamed (a field property)
+     * @param descriptor the model descriptor
+     * @return the permissible field names, never null
+     */
+    public static List<String> permissibleRenames(EditNodeAbstract node, JsonModelDescriptor descriptor) {
+        final List<String> names = new ArrayList<>();
+        if (node == null || descriptor == null
+                || !(node instanceof EditNodeProperty)
+                || node instanceof EditNodePropertyArr) {
+            return names;
+        }
+        final EditNode parent = node.getParent();
+        if (!(parent instanceof EditNodeObject owner) || owner.getJsonType() == null) {
+            return names;
+        }
+        collectDeclaredNames(owner.getJsonType(), names);
+        return names;
+    }
+
+    /**
+     * Collects the declared field names of the type - constructor params and fields, the
+     * supertype chain included - without doubles.
+     */
+    private static void collectDeclaredNames(JsonTypeDescriptor type, List<String> names) {
+        if (type == null) {
+            return;
+        }
+        for (JsonFieldDescriptor field : type.getAllFields()) {
+            if (field != null && field.getFieldName() != null && !names.contains(field.getFieldName())) {
+                names.add(field.getFieldName());
+            }
+        }
+        collectDeclaredNames(type.getParent(), names);
+    }
+
+    /**
      * Computes the permissible annotations of the selected node in hard mode: only declared ones, and only those
      * not already present. Object anchors offer the type declarations (pure wildcards like {@code doc:*} cover the
      * type itself, prefix patterns stay field specific), field anchors offer the explicit field declarations plus
