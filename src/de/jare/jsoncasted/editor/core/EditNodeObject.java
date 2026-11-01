@@ -122,6 +122,25 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         return objektValue;
     }
 
+    /**
+     * Sets the value of this object node and notifies the parser listener about the change -
+     * symmetric to {@link EditNodeProperty#setValue(String)}. Structural objects carry a null
+     * value; primitive row objects (a scalar array row, for example) hold their text here.
+     *
+     * @param value the new value
+     */
+    @Override
+    public void setValue(String value) {
+        String oldValue = this.objektValue;
+        this.objektValue = value;
+
+        // Notify parser listener about value change
+        EditTree tree = getEditTree();
+        if (tree != null) {
+            tree.notifyNodeValueChanged(this, oldValue, value);
+        }
+    }
+
     // ========== JsonTreeNodeData methods ==========
     /**
      * Returns the info string for this object node.
