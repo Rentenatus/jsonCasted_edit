@@ -58,6 +58,19 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     private volatile EditTree editTree;
 
     /**
+     * Wood identity of this node: objects carry the raw id text of their {@code _woodObjectId} entry, arrays and
+     * list properties carry the id of their {@code <"id">[...]} notation. {@code null} means the node has no identity.
+     */
+    private volatile String objektId;
+
+    /**
+     * Wood link target of this node: a reference stub stands in for an object or list that lives elsewhere (in the
+     * tree or in the {@link EditLinkingSet} holding space) and carries no own field children. {@code null} means the
+     * node is not a reference.
+     */
+    private volatile String linkTarget;
+
+    /**
      * Creates a new EditNodeAbstract with a generated edit ID. Initializes with
      * default range values and stateless edit status.
      */
@@ -177,6 +190,53 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      */
     public void setLastParsedHash(long lastParsedHash) {
         this.lastParsedHash = lastParsedHash;
+    }
+
+    /**
+     * Returns the wood identity of this node: the raw id text of the {@code _woodObjectId} entry on objects, or the id
+     * of the {@code <"id">[...]} notation on arrays and list properties.
+     *
+     * @return the objektId, or null when the node has no identity
+     */
+    public String getObjektId() {
+        return objektId;
+    }
+
+    /**
+     * Sets the wood identity of this node.
+     *
+     * @param objektId the raw id text to set, or null to remove the identity
+     */
+    public void setObjektId(String objektId) {
+        this.objektId = objektId;
+    }
+
+    /**
+     * Returns the wood link target of this node.
+     *
+     * @return the link target (e.g. "this::123"), or null when this node is not a reference stub
+     */
+    public String getLinkTarget() {
+        return linkTarget;
+    }
+
+    /**
+     * Sets the wood link target. A non-null link target turns this node into a reference stub.
+     *
+     * @param linkTarget the link target to set, or null to make this node a regular node
+     */
+    public void setLinkTarget(String linkTarget) {
+        this.linkTarget = linkTarget;
+    }
+
+    /**
+     * Checks whether this node is a reference stub standing in for an object or list that lives elsewhere (in the
+     * tree or in the EditLinkingSet holding space).
+     *
+     * @return true when a link target is set
+     */
+    public boolean isLinkReference() {
+        return linkTarget != null && !linkTarget.isEmpty();
     }
 
     /**

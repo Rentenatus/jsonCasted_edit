@@ -271,12 +271,27 @@ Arbeitsteilung der Pruefungen (die Antwort auf das Selektions-Dilemma):
 
 - **Skalare Werte**: typgetreue Sofort-Validierung - LONG parst oder die
   Eingabe wird abgewiesen; BOOLEAN und Enum sind ComboBoxen, keine freien
-  Textfelder.
+  Textfelder. (Umgesetzt: die Panes schreiben primitive Werte als
+  `SetNodeValueCommand` in BEIDEN Modi durch - Primitive sind formkonform,
+  der Parser bewertet den Inhalt; Hard validiert synchron, Soft folgt
+  asynchron.)
 - **Rename auf Feldern**: im Soft-Modus ist ein Rename eine Art-Aenderung per
   Hintertuer (neuer Name -> anderes Feld -> anderer Typ rueckt nach). Im
   Hard-Modus entweder verboten (Löschen + korrektes Add aus dem Untermenü)
   oder als hartes Re-Type gegen die Deklaration mit sofortiger Umwandlung
-  (offene Entscheidung 2). Map-Keys bleiben frei benennbar.
+  (offene Entscheidung 2). Map-Keys bleiben frei benennbar. (Umgesetzt:
+  verbieten für Freitext - der Tree-Editor und die name-Zeile des
+  Attributes-Pane verweigern Freitext im Hard-Modus mit FastLog-Notiz.
+  Der bewusste Ausnahmepfad ist die Kandidaten-Combobox: sowohl die
+  jsonField-Combobox des Attributes-Pane (Felder der Parent-Description)
+  als auch der Namens-Editor selbst (Tree-Editor und name-Zeile) bieten
+  im Hard-Modus nur die zulässigen Namen des Owner-Typs an -
+  ALLE deklarierten Felder (Konstruktor-Parameter und Felder, Supertyp-Kette inklusive); eine Auswahl re-bindet
+  als Rename - der Name ist modellbekannt, der Parser bewertet den
+  Inhalt. Transaktional: der Rename loest den synchronen Hard-Parse
+  aus (notifyNodeNameChanged -> parseNow), ein ERROR auf dem Knoten
+  oder im Teilbaum rollt ihn als Undo zurueck - Fast Log Notiz und
+  Fast-Log-Message-Fenster erklaeren die Verweigerung.)
 - **Delete**: Felder, die das Modell als Pflicht deklariert (offene
   Entscheidung 4: wo lebt "nicht loeschbar" im Modell - required-Flag,
   Nicht-Null-Faehigkeit), sind nicht loeschbar oder nur mit bewusster
@@ -294,7 +309,11 @@ Arbeitsteilung der Pruefungen (die Antwort auf das Selektions-Dilemma):
    mit sichtbaren ERRORs? Empfehlung: einfrieren.
 2. **Rename auf Feldern**: verbieten oder hartes Re-Type gegen die
    Deklaration? Empfehlung: verbieten (kleinere Loesung, kein zweiter
-   Typisierungs-Pfad).
+   Typisierungs-Pfad). Umgesetzt: verbieten fuer Freitext; die
+   Kandidaten-Combobox der Panes (zulässige Namen des Owner-Typs bzw.
+   jsonField-Felder der Parent-Description) ist der bewusste
+   Ausnahmepfad - eine Kandidaten-Auswahl laeuft auch im Hard-Modus als
+   Rename durch, der Parser bewertet den Inhalt.
 3. **0:1-Replace**: kein Add bei besetztem Feld oder atomare
    Replace-Aktion? Empfehlung: erst kein Add, Replace spaeter.
 4. **Pflichtfeld-Begriff**: wo deklariert das Modell "nicht loeschbar"?

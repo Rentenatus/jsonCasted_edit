@@ -215,9 +215,7 @@ public class EditNodeAnnotation extends EditNodeProperty {
             return false;
         }
         setEditStatus(EditStatus.OKAY);
-        setEditMessage(declared.isTransient()
-                ? "ok, transient annotation, model=" + descriptor.getModelName()
-                : "ok, model=" + descriptor.getModelName());
+        setEditMessage("ok, model=" + descriptor.getModelName());
         return true;
     }
 

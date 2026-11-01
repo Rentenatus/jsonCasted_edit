@@ -29,10 +29,12 @@ public class CoreEditValidatorContributor implements ValidatorContributor {
         // Register node validators
         registry.addNodeValidator(new EditNodeObjectTypeValidator());
         registry.addNodeValidator(new EditNodePropertyFieldValidator());
+        registry.addNodeValidator(new EditStringAnnotationValidator());
         
         // Register tree validators
         registry.addTreeValidator(new EditTreeModelConsistencyValidator());
         registry.addTreeValidator(new EditNodeRequiredFieldsValidator());
         registry.addTreeValidator(new EditNodeTypeHierarchyValidator());
+        registry.addTreeValidator(new WoodLinkValidator());
     }
 }

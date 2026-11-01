@@ -165,7 +165,9 @@ public class RenameNodeCommand extends AbstractEditCommand {
                 null,
                 null,
                 updated, null,
-                NO_UPDATE_ACTIONS
+                // REBUILD_AFFECTED repaints the renamed node in the tree, SELECT_UPDATED keeps it
+                // selected - on execute, redo and undo alike (the tree applies update actions only)
+                UPDATE_ACTIONS
         );
     }
 
@@ -194,7 +196,7 @@ public class RenameNodeCommand extends AbstractEditCommand {
                 null,
                 null,
                 updated, null,
-                NO_UPDATE_ACTIONS
+                UPDATE_ACTIONS
         );
     }
 

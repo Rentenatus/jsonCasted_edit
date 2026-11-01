@@ -24,17 +24,25 @@ import java.util.Objects;
  * </ul>
  *
  * <p>
- * This is used to resolve cross-references within the EditTree system. Only
- * EditNodeObject instances from the current tree are held, no properties. Each
- * EditNodeObject has an ID.</p>
+ * This is used to resolve cross-references within the EditTree system. Only nodes from the current tree are held.
+ * Identities are not bound to object nodes: array properties with the {@code <"id">[...]} notation register here too,
+ * so a shared list and its references stay connected. Reference stubs are object nodes.
+ * </p>
  *
  * @author Janusch Rentenatus
  */
 public final class EditLinkingSet {
 
     private String providerName;
-    private Map<String, EditNodeObject> objectIdMap;
-    private Map<String, EditNodeObject> linkMap;
+    private Map<String, EditNodeAbstract> objectIdMap;
+    private Map<String, EditNodeAbstract> linkMap;
+
+    /**
+     * Reverse index: link target (e.g. "save::123") to the reference stubs pointing at it. Keys are the
+     * link target strings exactly as stored on the referencing EditNodeObject instances, so a UI refresh or the
+     * validator can resolve all dependents of one object with a single lookup instead of filtering the link map.
+     */
+    private Map<String, List<EditNodeAbstract>> referencesByTarget;
 
     /**
      * Constructs an EditLinkingSet for the specified provider.
@@ -45,6 +53,7 @@ public final class EditLinkingSet {
         this.providerName = providerName;
         this.objectIdMap = new LinkedHashMap<>();
         this.linkMap = new LinkedHashMap<>();
+        this.referencesByTarget = new LinkedHashMap<>();
     }
 
     /**
@@ -71,7 +80,7 @@ public final class EditLinkingSet {
      *
      * @return the object ID map (may be modified).
      */
-    public Map<String, EditNodeObject> getObjectIdMap() {
+    public Map<String, EditNodeAbstract> getObjectIdMap() {
         return objectIdMap;
     }
 
@@ -81,7 +90,7 @@ public final class EditLinkingSet {
      * @param objectIdMap the map to set, or {@code null} to create an empty
      * map.
      */
-    public void setObjectIdMap(Map<String, EditNodeObject> objectIdMap) {
+    public void setObjectIdMap(Map<String, EditNodeAbstract> objectIdMap) {
         this.objectIdMap = objectIdMap != null ? new LinkedHashMap<>(objectIdMap) : new LinkedHashMap<>();
     }
 
@@ -91,7 +100,7 @@ public final class EditLinkingSet {
      *
      * @return the link map (may be modified).
      */
-    public Map<String, EditNodeObject> getLinkMap() {
+    public Map<String, EditNodeAbstract> getLinkMap() {
         return linkMap;
     }
 
@@ -100,7 +109,7 @@ public final class EditLinkingSet {
      *
      * @param linkMap the map to set, or {@code null} to create an empty map.
      */
-    public void setLinkMap(Map<String, EditNodeObject> linkMap) {
+    public void setLinkMap(Map<String, EditNodeAbstract> linkMap) {
         this.linkMap = linkMap != null ? new LinkedHashMap<>(linkMap) : new LinkedHashMap<>();
     }
 
@@ -111,7 +120,7 @@ public final class EditLinkingSet {
      * @return the corresponding EditNodeObject, or {@code null} if not found.
      * @throws NullPointerException if objectId is null.
      */
-    public EditNodeObject findObjectById(String objectId) {
+    public EditNodeAbstract findObjectById(String objectId) {
         Objects.requireNonNull(objectId, "objectId must not be null");
         return objectIdMap.get(providerName + COLONCOLON + objectId);
     }
@@ -123,7 +132,7 @@ public final class EditLinkingSet {
      * @return the corresponding EditNodeObject, or {@code null} if not found.
      * @throws NullPointerException if link is null.
      */
-    public EditNodeObject findLinkTarget(String link) {
+    public EditNodeAbstract findLinkTarget(String link) {
         Objects.requireNonNull(link, "link must not be null");
         return linkMap.get(link);
     }
@@ -134,7 +143,7 @@ public final class EditLinkingSet {
      * @param editNode the EditNodeObject to register.
      * @throws NullPointerException if editNode is null.
      */
-    public void registerObject(EditNodeObject editNode) {
+    public void registerObject(EditNodeAbstract editNode) {
         Objects.requireNonNull(editNode, "editNode must not be null");
         String objektId = editNode.getObjektId();
         if (objektId != null && !objektId.isEmpty()) {
@@ -149,7 +158,7 @@ public final class EditLinkingSet {
      * @param editNode the EditNodeObject to register as link target.
      * @throws NullPointerException if link or editNode is null.
      */
-    public void registerLink(String link, EditNodeObject editNode) {
+    public void registerLink(String link, EditNodeAbstract editNode) {
         Objects.requireNonNull(link, "link must not be null");
         Objects.requireNonNull(editNode, "editNode must not be null");
         linkMap.put(link, editNode);
@@ -161,15 +170,21 @@ public final class EditLinkingSet {
      * @param editNode the EditNodeObject to remove.
      * @return true if the node was removed, false otherwise.
      */
-    public boolean removeObject(EditNodeObject editNode) {
+    public boolean removeObject(EditNodeAbstract editNode) {
         if (editNode == null) {
             return false;
         }
         String objektId = editNode.getObjektId();
-        if (objektId != null && !objektId.isEmpty()) {
-            return objectIdMap.remove(providerName + COLONCOLON + objektId) != null;
+        if (objektId == null || objektId.isEmpty()) {
+            return false;
         }
-        return false;
+        // Final delete: the target leaves the identity map and its dependents follow - the referencesByTarget entry
+        // is removed with it, so a later lookup reports no references anymore. Link map entries pointing at the
+        // removed object are cleaned up as well.
+        final String qualifiedId = providerName + COLONCOLON + objektId;
+        referencesByTarget.remove(qualifiedId);
+        linkMap.values().removeIf(target -> target == editNode);
+        return objectIdMap.remove(qualifiedId) != null;
     }
 
     /**
@@ -178,7 +193,7 @@ public final class EditLinkingSet {
      * @param link the link reference to remove.
      * @return the EditNodeObject that was removed, or null if not found.
      */
-    public EditNodeObject removeLink(String link) {
+    public EditNodeAbstract removeLink(String link) {
         if (link == null) {
             return null;
         }
@@ -186,11 +201,103 @@ public final class EditLinkingSet {
     }
 
     /**
+     * Registers an EditNodeObject as a reference stub. The stub's link target is used as the reverse index key.
+     *
+     * @param reference the reference stub to register, must carry a link target.
+     * @return true when the stub was newly added to the reverse index.
+     * @throws NullPointerException if reference is null.
+     */
+    public boolean registerLinkReference(EditNodeObject reference) {
+        Objects.requireNonNull(reference, "reference must not be null");
+        final String target = reference.getLinkTarget();
+        if (target == null || target.isEmpty()) {
+            return false;
+        }
+        final List<EditNodeAbstract> references = referencesByTarget.computeIfAbsent(target, k -> new ArrayList<>());
+        if (references.contains(reference)) {
+            return false;
+        }
+        return references.add(reference);
+    }
+
+    /**
+     * Removes an EditNodeObject from the reverse index.
+     *
+     * @param reference the reference stub to remove.
+     * @return true when the stub was removed.
+     */
+    public boolean removeLinkReference(EditNodeObject reference) {
+        if (reference == null) {
+            return false;
+        }
+        final String target = reference.getLinkTarget();
+        if (target == null || target.isEmpty()) {
+            return false;
+        }
+        final List<EditNodeAbstract> references = referencesByTarget.get(target);
+        if (references == null) {
+            return false;
+        }
+        final boolean removed = references.remove(reference);
+        if (references.isEmpty()) {
+            referencesByTarget.remove(target);
+        }
+        return removed;
+    }
+
+    /**
+     * Returns all reference stubs pointing at the given link target. The final delete of a target object removes the
+     * entry, so an empty result means either no references or the target is gone.
+     *
+     * @param linkTarget the link target (e.g. "save::123").
+     * @return the referencing stubs, never null.
+     */
+    public List<EditNodeAbstract> getReferencesTo(String linkTarget) {
+        if (linkTarget == null) {
+            return List.of();
+        }
+        final List<EditNodeAbstract> references = referencesByTarget.get(linkTarget);
+        return references != null ? Collections.unmodifiableList(references) : List.of();
+    }
+
+    /**
+     * Checks whether any reference stub points at the given link target.
+     *
+     * @param linkTarget the link target (e.g. "save::123").
+     * @return true when at least one reference exists.
+     */
+    public boolean hasReferencesTo(String linkTarget) {
+        if (linkTarget == null) {
+            return false;
+        }
+        final List<EditNodeAbstract> references = referencesByTarget.get(linkTarget);
+        return references != null && !references.isEmpty();
+    }
+
+    /**
+     * Connects each registered reference stub to its target: for every link target key the target object is looked up
+     * in the identity map and, when present, registered in the link map so findLinkTarget resolves it. Keys pointing at
+     * other providers stay unresolved here - a dangling link is a case for the validator, not for the import.
+     *
+     * Called after the whole tree is built, because a reference may precede its target in the document order.
+     */
+    public void resolveLinkTargets() {
+        for (Map.Entry<String, List<EditNodeAbstract>> entry : referencesByTarget.entrySet()) {
+            final EditNodeAbstract target = objectIdMap.get(entry.getKey());
+            if (target != null) {
+                linkMap.put(entry.getKey(), target);
+            }
+        }
+    }
+
+
+
+    /**
      * Returns an unmodifiable view of the object ID map.
      *
      * @return unmodifiable map of object IDs to EditNodeObject instances.
      */
-    public Map<String, EditNodeObject> getUnmodifiableObjectIdMap() {
+    public Map<String, EditNodeAbstract> getUnmodifiableObjectIdMap() {
         return Collections.unmodifiableMap(objectIdMap);
     }
 
@@ -199,7 +306,7 @@ public final class EditLinkingSet {
      *
      * @return unmodifiable map of link references to EditNodeObject instances.
      */
-    public Map<String, EditNodeObject> getUnmodifiableLinkMap() {
+    public Map<String, EditNodeAbstract> getUnmodifiableLinkMap() {
         return Collections.unmodifiableMap(linkMap);
     }
 
@@ -208,7 +315,7 @@ public final class EditLinkingSet {
      *
      * @return list of all registered EditNodeObject instances.
      */
-    public List<EditNodeObject> getAllObjects() {
+    public List<EditNodeAbstract> getAllObjects() {
         return new ArrayList<>(objectIdMap.values());
     }
 
@@ -217,7 +324,7 @@ public final class EditLinkingSet {
      *
      * @return list of all linked EditNodeObject instances.
      */
-    public List<EditNodeObject> getAllLinkTargets() {
+    public List<EditNodeAbstract> getAllLinkTargets() {
         return new ArrayList<>(linkMap.values());
     }
 
@@ -253,6 +360,7 @@ public final class EditLinkingSet {
     public void clear() {
         objectIdMap.clear();
         linkMap.clear();
+        referencesByTarget.clear();
     }
 
     @Override
@@ -261,6 +369,7 @@ public final class EditLinkingSet {
                 + "providerName='" + providerName + '\''
                 + ", objectIdMapSize=" + (objectIdMap != null ? objectIdMap.size() : 0)
                 + ", linkMapSize=" + (linkMap != null ? linkMap.size() : 0)
+                + ", referencesSize=" + (referencesByTarget != null ? referencesByTarget.size() : 0)
                 + '}';
     }
 }
