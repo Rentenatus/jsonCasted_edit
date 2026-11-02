@@ -43,6 +43,13 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     private volatile String castName;
 
     /**
+     * Provenance of the cast for the diff projection (see doc/TREE_DIFF.md in jsonCasted): {@code true} when type
+     * resolution assigned it — parse feedback, not content, the diff projection ignores it; {@code false} when it
+     * is content (the file's {@code _class} entry or an explicit user decision).
+     */
+    private volatile boolean castInferred;
+
+    /**
      * Provenance of the cast: {@code true} when the cast was inherited from the element type of the containing
      * property's field descriptor (a pre-assignment by the element type propagation) instead of being an explicit
      * decision (user input, {@code _class} in the JSON or the parser's own type resolution). An inherited cast stays
@@ -182,6 +189,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setCastName(String castName) {
         final String oldCast = this.castName;
         this.castName = castName;
+        this.castInferred = false; // the file's _class entry or a user decision is content
         markMerkleDirty(); // the cast is the CLASS property of the diff projection
         // An explicit cast (user input, _class, inference result) is a
         // decision of its own and is no longer redirectable by the element
@@ -195,6 +203,42 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         if (tree != null && !java.util.Objects.equals(oldCast, castName)) {
             tree.notifyTypeDescriptorChanged(this);
         }
+    }
+
+    /**
+     * Sets the cast name as a result of type resolution (parse feedback, not content): the diff projection ignores
+     * an inferred cast. A cast that was already content and is confirmed unchanged keeps its content provenance,
+     * so the projection never reports a phantom removal. A content cast redirected by the resolution becomes
+     * inferred — the parser, not the user, made that change.
+     *
+     * @param castName the resolved cast name to set, or {@code null} to clear.
+     */
+    public void setCastNameInferred(String castName) {
+        final String oldCast = this.castName;
+        final boolean wasContent = oldCast != null && !castInferred;
+        this.castName = castName;
+        this.castInherited = false;
+        if (!wasContent || !java.util.Objects.equals(oldCast, castName)) {
+            this.castInferred = true;
+        }
+        markMerkleDirty();
+
+        // Notify parser listener about a cast change - symmetric to setCastName(String).
+        EditTree tree = getEditTree();
+        if (tree != null && !java.util.Objects.equals(oldCast, castName)) {
+            tree.notifyTypeDescriptorChanged(this);
+        }
+    }
+
+    /**
+     * Tells whether the current cast was assigned by type resolution — parse feedback, not content for the diff
+     * projection.
+     *
+     * @return true when the cast is inference-derived
+     */
+    @Override
+    public boolean isCastInferred() {
+        return castInferred;
     }
 
     /**
@@ -234,6 +278,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         }
         this.castInherited = true;
         this.castName = elementType.getTypeName();
+        this.castInferred = true; // element type propagation is parse feedback, not content
         this.jsonType = elementType;
         markMerkleDirty();
     }
@@ -268,8 +313,9 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
                 // Inherited pre-assignment confirmed: keep the inherited
                 // provenance so a later field event can redirect the cast.
                 castName = foundType.getTypeName();
+                castInferred = true; // still parse feedback, not content
             } else {
-                setCastName(foundType.getTypeName());
+                setCastNameInferred(foundType.getTypeName());
             }
             markOkay(descriptor);
             return true;
@@ -339,6 +385,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
             copy.addChildPhase2Fast(deepCopy);
         }
         copy.setCastName(castName);
+        copy.castInferred = castInferred; // provenance survives the copy
         copy.castInherited = castInherited;
         copy.setObjektId(getObjektId());
         copy.setLinkTarget(getLinkTarget());

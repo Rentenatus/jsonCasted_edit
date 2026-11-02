@@ -156,7 +156,7 @@ public final class JsonTreeConverter {
                         // Wire the root type so the parser's root fallback can
                         // assign it when the root carries no cast name.
                         retEditTree.setRootType(rootType);
-                        rootObj.setCastName(rootType.getTypeName());
+                        rootObj.setCastNameInferred(rootType.getTypeName());
                     }
                 }
             }

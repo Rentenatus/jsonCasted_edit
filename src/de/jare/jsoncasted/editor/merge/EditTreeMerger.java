@@ -188,8 +188,8 @@ public final class EditTreeMerger {
             return new RenameNodeCommand(oursNode, theirsNode.getName());
         }
         if (op.getProperty() == DeltaProperty.CLASS) {
-            return theirsNode.getCastName() == null ? null : attributeCommand(oursNode, ATTR_CAST_NAME,
-                    theirsNode.getCastName());
+            final String cast = DifferableNode.contentCast(theirsNode); // inferred casts are not applicable
+            return cast == null ? null : attributeCommand(oursNode, ATTR_CAST_NAME, cast);
         }
         if (op.getProperty() == DeltaProperty.LINK_TARGET) {
             return theirsNode.getLinkTarget() == null ? null : attributeCommand(oursNode, ATTR_LINK_TARGET,

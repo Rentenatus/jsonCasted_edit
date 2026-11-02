@@ -189,4 +189,29 @@ public class EditTreeMergerNGTest {
         JsonResource theirs = JsonParserService.parse(BASE_JSON, JsonDebugLevel.SIMPLE);
         EditTreeMerger.merge(bare, theirs, MergePolicy.SAFE_AUTO, null);
     }
+
+    /**
+     * Regression (live W3 finding): type resolution inside a subtree the external side removed must not surface as
+     * a phantom REMOVED_VS_MODIFIED conflict — inferred casts are parse feedback, not user content.
+     */
+    @Test
+    public void testInferredCastsDoNotPhantomConflict() throws Exception {
+        EditTree ours = importTree("{\"a\": 1, \"b\": {\"c\": 2}}");
+        // simulate the parser typing the object data child of the member theirs will remove
+        EditNode root = ours.getRoot();
+        for (int i = 0; i < root.getChildCount(); i++) {
+            if (root.getChildAt(i) instanceof EditNodeProperty prop && "b".equals(prop.getName())) {
+                ((EditNodeObject) prop.getChildAt(0)).setCastNameInferred("de.jare.jsonconfig.item.ConfigThing");
+            }
+        }
+
+        JsonResource theirs = JsonParserService.parse("{\"a\": 1}", JsonDebugLevel.SIMPLE);
+        de.jare.jsoncasted.diff.MergePlan plan = EditTreeMerger.analyze(ours, theirs);
+
+        assertTrue(!plan.hasConflicts(),
+                "inferred casts must not conflict a removal: " + plan.getConflicts());
+        assertEquals(plan.getApplyOps().size(), 1);
+        assertEquals(plan.getApplyOps().get(0).getType(), de.jare.jsoncasted.diff.DeltaType.REMOVE);
+        assertEquals(plan.getApplyOps().get(0).getKey(), "$.b");
+    }
 }

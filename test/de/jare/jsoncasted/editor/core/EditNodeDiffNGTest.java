@@ -216,4 +216,47 @@ public class EditNodeDiffNGTest {
         assertEquals(fresh.getMerkleHash(), importRoot(DEMO_JSON).getMerkleHash(),
                 "two fresh imports must hash equally");
     }
+
+    /**
+     * Type resolution is parse feedback, not content: an inferred cast is invisible to the diff.
+     */
+    @Test
+    public void testInferredCastIsInvisibleToTheDiff() throws Exception {
+        EditNodeAbstract base = importRoot(DEMO_JSON);
+        EditNodeAbstract resolved = importRoot(DEMO_JSON);
+        ((EditNodeObject) resolved).setCastNameInferred("de.jare.jsonconfig.item.ConfigRoot");
+        assertTrue(((EditNodeObject) resolved).isCastInferred(), "the flag must mark the inference");
+        assertTrue(TreeDiffer.diff(base, resolved).isEmpty(),
+                "type resolution must not appear as content change");
+    }
+
+    /**
+     * A content cast (the file's _class entry or a user decision) stays visible as MODIFY(CLASS).
+     */
+    @Test
+    public void testContentCastIsVisibleToTheDiff() throws Exception {
+        EditNodeAbstract base = importRoot(DEMO_JSON);
+        EditNodeAbstract casted = importRoot(DEMO_JSON);
+        ((EditNodeObject) casted).setCastName("de.jare.jsonconfig.item.ConfigRoot");
+        assertTrue(!((EditNodeObject) casted).isCastInferred(), "an explicit cast is content");
+        DiffReport report = TreeDiffer.diff(base, casted);
+        assertEquals(report.getOps().size(), 1, "one CLASS op expected: " + report);
+        assertEquals(report.getOps().get(0).getProperty(), DeltaProperty.CLASS);
+    }
+
+    /**
+     * A resolution that only confirms an existing content cast keeps the content provenance — the projection never
+     * reports a phantom removal.
+     */
+    @Test
+    public void testConfirmedContentCastKeepsProvenance() throws Exception {
+        EditNodeObject casted = (EditNodeObject) importRoot(DEMO_JSON);
+        casted.setCastName("de.jare.X");
+        casted.setCastNameInferred("de.jare.X"); // the model resolves exactly this cast
+        assertTrue(!casted.isCastInferred(), "a confirmed content cast stays content");
+        EditNodeAbstract base = importRoot(DEMO_JSON);
+        DiffReport report = TreeDiffer.diff(base, casted);
+        assertEquals(report.getOps().size(), 1, "the CLASS change must stay visible: " + report);
+        assertEquals(report.getOps().get(0).getProperty(), DeltaProperty.CLASS);
+    }
 }
