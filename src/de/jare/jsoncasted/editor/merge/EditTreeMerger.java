@@ -143,6 +143,9 @@ public final class EditTreeMerger {
                 }
             } catch (PathUnresolvableException e) {
                 problems.add("unresolvable " + e.getMessage() + ": " + op);
+            } catch (IllegalStateException e) {
+                // MOVE/REORDER and other structural deltas are not applicable (v1) — a decision must not crash
+                problems.add("unsupported " + op.getType() + ": " + op);
             }
         }
         if (commands.isEmpty()) {
