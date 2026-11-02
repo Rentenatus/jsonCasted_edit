@@ -64,9 +64,20 @@ public final class EditTreeMerger {
      * @return the merge plan, never {@code null}.
      */
     public static MergePlan analyze(EditTree oursTree, JsonResource theirsResource) {
+        return analyze(oursTree, convert(oursTree, theirsResource).getRoot());
+    }
+
+    /**
+     * Analyzes the three sides against a theirs that is already an edit tree root — for example another open editor
+     * playing the external version. The base still comes from ours' import state.
+     *
+     * @param oursTree the edited tree, must have an import state.
+     * @param theirsRoot the root of the external version, never {@code null}.
+     * @return the merge plan, never {@code null}.
+     */
+    public static MergePlan analyze(EditTree oursTree, EditNodeAbstract theirsRoot) {
         final EditTree baseEdit = convert(oursTree, requiredBase(oursTree));
-        final EditTree theirsEdit = convert(oursTree, theirsResource);
-        return ThreeWayDiffer.analyze(baseEdit.getRoot(), oursTree.getRoot(), theirsEdit.getRoot());
+        return ThreeWayDiffer.analyze(baseEdit.getRoot(), oursTree.getRoot(), theirsRoot);
     }
 
     /**
