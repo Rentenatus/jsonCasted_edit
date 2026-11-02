@@ -214,4 +214,77 @@ public class EditTreeMergerNGTest {
         assertEquals(plan.getApplyOps().get(0).getType(), de.jare.jsoncasted.diff.DeltaType.REMOVE);
         assertEquals(plan.getApplyOps().get(0).getKey(), "$.b");
     }
+
+    /**
+     * R4: after a save the saved file is the new base. Cast provenance stays untouched (the writer persists
+     * {@code _class} only for detached {@code _woodDefinitions} rows, not for tree objects), so the tree matches
+     * its own refreshed base without phantom deltas.
+     */
+    @Test
+    public void testSavedBaseRefreshKeepsDiffClean() throws Exception {
+        EditTree ours = importTree(BASE_JSON);
+        ((EditNodeObject) ours.getRoot()).setCastNameInferred("de.jare.X"); // the parser typed the root
+
+        String saved = EditTreeWriter.toJsonString(ours);
+        JsonResource savedResource = JsonParserService.parse(saved, JsonDebugLevel.SIMPLE);
+        ours.adoptSavedBase(savedResource);
+
+        assertEquals(ours.getBaseSnapshot(), savedResource, "the saved file is the new base");
+        assertTrue(((EditNodeObject) ours.getRoot()).isCastInferred(),
+                "tree casts keep their provenance across a save");
+        EditTree baseEdit = JsonTreeConverter.convertRessourceToEditTree(savedResource,
+                ours.getRoot().getName());
+        assertTrue(de.jare.jsoncasted.diff.TreeDiffer.diff(baseEdit.getRoot(), ours.getRoot()).isEmpty(),
+                "the tree must match its saved state without phantom deltas");
+    }
+
+    /**
+     * The merge against a live theirs root (another open editor playing the external version): one transaction,
+     * both sides' changes survive.
+     */
+    @Test
+    public void testMergeAgainstLiveTheirsRoot() throws Exception {
+        EditTree ours = importTree(BASE_JSON);
+        setValue(ours, "a", "10");
+        EditTree theirsTree = importTree(BASE_JSON.replace("\"b\": 2", "\"b\": 99"));
+
+        HistoryManager history = new HistoryManager(ours);
+        MergeOutcome outcome = EditTreeMerger.merge(ours, theirsTree.getRoot(), MergePolicy.SAFE_AUTO, history);
+
+        assertTrue(outcome.isApplied(), outcome.toString());
+        assertTrue(!outcome.getPlan().hasConflicts());
+        assertEquals(getValue(ours, "a"), "10");
+        assertEquals(getValue(ours, "b"), "99");
+        assertEquals(history.getUndoSize(), 1);
+    }
+
+    /**
+     * The conflict decision path: chosen theirs resolutions plus the apply list land in ONE transaction (one undo
+     * step), and undo restores the pre-merge state.
+     */
+    @Test
+    public void testApplyDeltasResolvesConflictTakeTheirs() throws Exception {
+        EditTree ours = importTree(BASE_JSON);
+        setValue(ours, "a", "10");
+        EditTree theirsTree = importTree(
+                BASE_JSON.replace("\"a\": 1", "\"a\": 20").replace("\"b\": 2", "\"b\": 99"));
+
+        de.jare.jsoncasted.diff.MergePlan plan = EditTreeMerger.analyze(ours, theirsTree.getRoot());
+        assertTrue(plan.hasConflicts(), "the a-edits diverge: " + plan);
+        assertEquals(plan.getApplyOps().size(), 1, "the b-change still applies");
+
+        java.util.List<de.jare.jsoncasted.diff.DeltaOp> chosen = new java.util.ArrayList<>(plan.getApplyOps());
+        chosen.add(plan.getConflicts().get(0).getTheirsDelta()); // decision: take theirs
+        HistoryManager history = new HistoryManager(ours);
+        MergeOutcome outcome = EditTreeMerger.applyDeltas(ours, theirsTree.getRoot(), plan, chosen, history);
+
+        assertTrue(outcome.isApplied(), outcome.toString());
+        assertEquals(getValue(ours, "a"), "20", "the theirs decision must win");
+        assertEquals(getValue(ours, "b"), "99");
+        assertEquals(history.getUndoSize(), 1, "one undo step for the whole merge");
+
+        history.undo();
+        assertEquals(getValue(ours, "a"), "10", "undo restores the pre-merge state");
+        assertEquals(getValue(ours, "b"), "2");
+    }
 }

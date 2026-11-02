@@ -92,17 +92,48 @@ public final class EditTreeMerger {
      */
     public static MergeOutcome merge(EditTree oursTree, JsonResource theirsResource, MergePolicy policy,
             HistoryManager history) {
-        final MergePlan plan = analyze(oursTree, theirsResource);
+        return merge(oursTree, convert(oursTree, theirsResource).getRoot(), policy, history);
+    }
+
+    /**
+     * Merges against a theirs that is already an edit tree root — for example another open editor playing the
+     * external version.
+     *
+     * @param oursTree the edited tree, must have an import state.
+     * @param theirsRoot the root of the external version, never {@code null}.
+     * @param policy the merge policy.
+     * @param history the history to book the merge transaction on, or {@code null} to execute without history.
+     * @return the outcome, never {@code null}.
+     */
+    public static MergeOutcome merge(EditTree oursTree, EditNodeAbstract theirsRoot, MergePolicy policy,
+            HistoryManager history) {
+        final MergePlan plan = analyze(oursTree, theirsRoot);
         if (policy != MergePolicy.SAFE_AUTO || plan.getApplyOps().isEmpty()) {
             return new MergeOutcome(plan, false, List.of());
         }
-        final EditTree theirsEdit = convert(oursTree, theirsResource);
+        return applyDeltas(oursTree, theirsRoot, plan, plan.getApplyOps(), history);
+    }
+
+    /**
+     * Applies specific theirs deltas as one transaction through the given history (one undo step). This is the
+     * application path of {@code SAFE_AUTO} as well as of the conflict decision: the chosen conflict resolutions
+     * plus the non-overlapping apply list land in the same composite. Deltas that translate into no command
+     * (drifted paths, cast or link removals) are collected as problems instead of failing silently.
+     *
+     * @param oursTree the tree to apply onto, never {@code null}.
+     * @param theirsRoot the root of the external version (source of values and added subtrees), never {@code null}.
+     * @param plan the analysis plan (for the outcome), never {@code null}.
+     * @param deltas the theirs deltas to apply, never {@code null}.
+     * @param history the history to book the transaction on, or {@code null} to execute without history.
+     * @return the outcome, never {@code null}.
+     */
+    public static MergeOutcome applyDeltas(EditTree oursTree, EditNodeAbstract theirsRoot, MergePlan plan,
+            List<DeltaOp> deltas, HistoryManager history) {
         final EditNodeAbstract oursRoot = oursTree.getRoot();
-        final EditNodeAbstract theirsRoot = theirsEdit.getRoot();
 
         final List<EditCommand> commands = new ArrayList<>();
         final List<String> problems = new ArrayList<>();
-        for (DeltaOp op : inApplicationOrder(plan.getApplyOps())) {
+        for (DeltaOp op : inApplicationOrder(deltas)) {
             try {
                 final EditCommand command = buildCommand(oursRoot, theirsRoot, op);
                 if (command != null) {

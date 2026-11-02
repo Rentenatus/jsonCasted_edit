@@ -833,6 +833,18 @@ public class EditTree {
     }
 
     /**
+     * Refreshes the import state after a save (R4 of doc/TREE_DIFF.md in jsonCasted): the saved file is the new
+     * merge base, so the next 3-way analysis runs against what is on disk. Cast provenance is deliberately not
+     * touched — the writer persists {@code _class} only for detached {@code _woodDefinitions} rows, not for tree
+     * objects, so tree casts stay what they are (inferred stays inferred, content stays content).
+     *
+     * @param savedResource the parse of the saved file, not {@code null}.
+     */
+    public void adoptSavedBase(JsonResource savedResource) {
+        this.baseSnapshot = savedResource;
+    }
+
+    /**
      * Returns the JsonModelDescriptor for this tree.
      *
      * @return the model descriptor, or {@code null} if not set.
