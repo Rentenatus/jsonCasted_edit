@@ -259,4 +259,20 @@ public class EditNodeDiffNGTest {
         assertEquals(report.getOps().size(), 1, "the CLASS change must stay visible: " + report);
         assertEquals(report.getOps().get(0).getProperty(), DeltaProperty.CLASS);
     }
+
+    /**
+     * Nested array rows are positional, not keyed members: a reorder reports the base indices as order labels —
+     * not the same row name three times.
+     */
+    @Test
+    public void testNestedArrayReorderLabelsByBaseIndex() throws Exception {
+        EditNodeAbstract base = importRoot("{\"matrix\": [[1, 2], [3, 4], [5, 6]]}");
+        EditNodeAbstract theirs = importRoot("{\"matrix\": [[5, 6], [1, 2], [3, 4]]}");
+        DiffReport report = TreeDiffer.diff(base, theirs);
+        assertEquals(report.getOps().size(), 1, "one op expected: " + report);
+        DeltaOp op = report.getOps().get(0);
+        assertEquals(op.getType(), DeltaType.REORDER);
+        assertEquals(op.getKey(), "$.matrix");
+        assertEquals(op.getNewOrder(), List.of("2", "0", "1"), "the order must name the base indices");
+    }
 }

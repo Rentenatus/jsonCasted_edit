@@ -291,13 +291,16 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, Differabl
 
     /**
      * Returns the member key of this node in its parent: a property is the keyed member of its parent object, so
-     * its key is its property name. Array rows and object data children are positional and have no member key.
+     * its key is its property name. Properties inside an array (nested array rows, scalar rows wrapped in
+     * properties) are positional — their name is not a member key, otherwise a reorder reports the same label for
+     * every row. Array rows and object data children have no member key.
      *
-     * @return the property name for property nodes, else {@code null}.
+     * @return the property name for keyed members, else {@code null}.
      */
     @Override
     public String getMemberKey() {
-        return this instanceof EditNodeProperty ? getName() : null;
+        return this instanceof EditNodeProperty && getParent() instanceof EditNodeObject
+                ? getName() : null;
     }
 
     /**
