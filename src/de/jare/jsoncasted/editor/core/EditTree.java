@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
 import de.jare.jsoncasted.model.JsonCollectionType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
@@ -802,6 +803,33 @@ public class EditTree {
      */
     public void setLinkingSet(EditLinkingSet linkingSet) {
         this.linkingSet = linkingSet;
+    }
+
+    /**
+     * The import state of this tree (gap G1 of doc/TREE_DIFF.md in jsonCasted): the parsed resource this EditTree was
+     * created from, retained as the base side of the 3-way merge. The JsonResource root is the layer-1 data held on
+     * layer-2 storage per the concept's layer assignment — the import state is part of the status. {@code null} for
+     * trees built without an import (then no merge against an external change is possible).
+     */
+    private JsonResource baseSnapshot;
+
+    /**
+     * Adopts the import state as the merge base. Called by the import converter right after creation; a later save
+     * must refresh the snapshot to the saved state.
+     *
+     * @param baseSnapshot the imported resource, not {@code null}.
+     */
+    public void adoptBaseSnapshot(JsonResource baseSnapshot) {
+        this.baseSnapshot = baseSnapshot;
+    }
+
+    /**
+     * Returns the retained import state, the base side of the 3-way merge.
+     *
+     * @return the imported resource, or {@code null} when this tree has no import state.
+     */
+    public JsonResource getBaseSnapshot() {
+        return baseSnapshot;
     }
 
     /**

@@ -179,6 +179,7 @@ public final class JsonTreeConverter {
         EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor, linkingSet);
         EditTree tree = new EditTree(root, weightMonitor);
         tree.setLinkingSet(linkingSet);
+        tree.adoptBaseSnapshot(resource); // G1: retain the import state as the merge base
         return tree;
     }
 
