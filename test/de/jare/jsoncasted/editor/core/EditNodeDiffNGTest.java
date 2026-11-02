@@ -261,8 +261,8 @@ public class EditNodeDiffNGTest {
     }
 
     /**
-     * Nested array rows are positional, not keyed members: a reorder reports the base indices as order labels —
-     * not the same row name three times.
+     * Nested array rows are positional, not keyed members: the rows all render under the same name, so the order
+     * labels disambiguate with the base index — what the tree shows plus the position.
      */
     @Test
     public void testNestedArrayReorderLabelsByBaseIndex() throws Exception {
@@ -273,6 +273,7 @@ public class EditNodeDiffNGTest {
         DeltaOp op = report.getOps().get(0);
         assertEquals(op.getType(), DeltaType.REORDER);
         assertEquals(op.getKey(), "$.matrix");
-        assertEquals(op.getNewOrder(), List.of("2", "0", "1"), "the order must name the base indices");
+        assertEquals(op.getNewOrder(), List.of("array#2", "array#0", "array#1"),
+                "the order must name the rendered row name and the base position");
     }
 }
