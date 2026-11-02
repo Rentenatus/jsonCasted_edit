@@ -103,6 +103,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setName(String name) {
         String oldName = this.objektValue;
         this.objektValue = name;
+        markMerkleDirty(); // the object value is the NAME property of the diff projection
 
         // Notify parser listener about name change — this triggers
         // asynchronous re-parsing via the parse queue.
@@ -133,6 +134,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setValue(String value) {
         String oldValue = this.objektValue;
         this.objektValue = value;
+        markMerkleDirty();
 
         // Notify parser listener about value change
         EditTree tree = getEditTree();
@@ -180,6 +182,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
     public void setCastName(String castName) {
         final String oldCast = this.castName;
         this.castName = castName;
+        markMerkleDirty(); // the cast is the CLASS property of the diff projection
         // An explicit cast (user input, _class, inference result) is a
         // decision of its own and is no longer redirectable by the element
         // type propagation.
@@ -232,6 +235,7 @@ public final class EditNodeObject extends EditNodeAbstract implements EditNode {
         this.castInherited = true;
         this.castName = elementType.getTypeName();
         this.jsonType = elementType;
+        markMerkleDirty();
     }
 
     @Override
