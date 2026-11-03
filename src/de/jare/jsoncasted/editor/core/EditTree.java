@@ -53,6 +53,17 @@ public class EditTree {
     }
 
     /**
+     * Creates a new EditTree around an existing root, for example a deep copy shown in a second view: the root is
+     * range-relabeled, gets this tree as its edit tree and the parse states of a fresh tree (NONE) - it is
+     * detached from the origin tree's parse and linking state.
+     *
+     * @param root the root node of the tree, not null.
+     */
+    public EditTree(EditNodeAbstract root) {
+        this(root, new EditTimes());
+    }
+
+    /**
      * Creates a new EditTree with the specified root node. The provided root node becomes the top-level node of the
      * tree, and all subsequent nodes added to the tree will be organized under this root. This constructor allows for
      * initializing the tree with a pre-defined structure if desired.
