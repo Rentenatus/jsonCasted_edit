@@ -102,7 +102,9 @@ public final class JsonTreeConverter {
         final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
 
         String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
-        File descriptionFile = new File(descriptionFilePath);
+        // a string import without a _woodModel reference carries no description path - the plain import
+        // (descriptor null) instead of the old new File(null) NullPointerException
+        File descriptionFile = descriptionFilePath != null ? new File(descriptionFilePath) : null;
         return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
     }
 

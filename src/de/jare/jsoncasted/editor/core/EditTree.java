@@ -8,6 +8,8 @@ package de.jare.jsoncasted.editor.core;
 
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
+import de.jare.jsoncasted.lang.ResourceFingerprint;
+import java.io.File;
 import de.jare.jsoncasted.model.JsonCollectionType;
 import de.jare.jsoncasted.model.descriptor.JsonFieldDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonFieldTypeNote;
@@ -824,6 +826,33 @@ public class EditTree {
      */
     private JsonResource baseSnapshot;
 
+    // State model of doc/JSON_PROJECT.md, edit layer - deliberately separate vocabulary from the parse layer:
+    // the working-copy axis CLEAN/EDITED (unsaved changes in memory - the first dirty tracking for editor trees;
+    // STALE of the parse layer means an outdated cached parse, never this) and the file-currency axis
+    // CURRENT/OUTDATED (the origin file changed externally; the working copy detached from the file state).
+    // Hard/soft parse is NOT a lifecycle dimension (it is the editing mode) and node-level EditStatus is per-node
+    // parse feedback - neither touches these axes. The dirty state flips on the command funnels, the fingerprint
+    // is adopted at import and refreshed on every successful save (making the axes computable on the edit layer
+    // alone, without any layer-1 object).
+    private ResourceFingerprint importedFingerprint;
+    private String originFile;
+    private boolean edited;
+
+    /**
+     * Derives the origin fingerprint for adoption: the resource's captured load state when it has one (the
+     * project capture), else a fresh capture from the resource's file (standalone import).
+     */
+    private static ResourceFingerprint originFingerprintOf(JsonResource resource) {
+        if (resource == null) {
+            return null;
+        }
+        if (resource.getFingerprint() != null) {
+            return resource.getFingerprint();
+        }
+        return resource.hasResourceFile()
+                ? ResourceFingerprint.of(new File(resource.getResourceFile())) : null;
+    }
+
     /**
      * Adopts the import state as the merge base. Called by the import converter right after creation; a later save
      * must refresh the snapshot to the saved state.
@@ -832,6 +861,10 @@ public class EditTree {
      */
     public void adoptBaseSnapshot(JsonResource baseSnapshot) {
         this.baseSnapshot = baseSnapshot;
+        this.importedFingerprint = originFingerprintOf(baseSnapshot);
+        this.originFile = baseSnapshot != null && baseSnapshot.hasResourceFile()
+                ? baseSnapshot.getResourceFile() : null;
+        this.edited = false;
     }
 
     /**
@@ -847,12 +880,71 @@ public class EditTree {
      * Refreshes the import state after a save (R4 of doc/TREE_DIFF.md in jsonCasted): the saved file is the new
      * merge base, so the next 3-way analysis runs against what is on disk. Cast provenance is deliberately not
      * touched — the writer persists {@code _class} only for detached {@code _woodDefinitions} rows, not for tree
-     * objects, so tree casts stay what they are (inferred stays inferred, content stays content).
+     * objects, so tree casts stay what they are (inferred stays inferred, content stays content). The save also
+     * refreshes the currency fingerprint and sets the working copy back to CLEAN - the successful save IS the new
+     * clean state.
      *
      * @param savedResource the parse of the saved file, not {@code null}.
      */
     public void adoptSavedBase(JsonResource savedResource) {
         this.baseSnapshot = savedResource;
+        this.importedFingerprint = originFingerprintOf(savedResource);
+        this.originFile = savedResource != null && savedResource.hasResourceFile()
+                ? savedResource.getResourceFile() : originFile;
+        this.edited = false;
+    }
+
+    /**
+     * Working-copy axis (concept doc/JSON_PROJECT.md, edit layer): true when unsaved user changes are in memory.
+     * Conservative direction: any executed, undone or redone command after the last save counts until the next
+     * save or an explicit {@link #markClean()} - a false EDITED never loses work, a false CLEAN would.
+     *
+     * @return true when the tree carries changes the file does not have.
+     */
+    public boolean isEdited() {
+        return edited;
+    }
+
+    /**
+     * Flags the working copy as EDITED - called by the command funnels (execute, undo, redo) of every mutating
+     * command. DISALLOWED and skipped commands never flag.
+     */
+    public void markEdited() {
+        this.edited = true;
+    }
+
+    /**
+     * Declares the working copy CLEAN without a save - the manual counterpart of {@link #adoptSavedBase}, for
+     * tree exchanges that persist through other rails.
+     */
+    public void markClean() {
+        this.edited = false;
+    }
+
+    /**
+     * File-currency axis (concept doc/JSON_PROJECT.md, edit layer): true when the origin file changed externally
+     * since the import/save - the working copy is detached from the file state (OUTDATED, never called STALE -
+     * that word belongs to the parse layer). Trees without origin file (in-memory, string imports) cannot
+     * detach: they stay CURRENT. A vanished origin file counts as OUTDATED - the save guard must not blindly
+     * overwrite then.
+     *
+     * @return true when the file deviates from the adopted import state.
+     */
+    public boolean isOutdated() {
+        if (importedFingerprint == null || originFile == null) {
+            return false;
+        }
+        final ResourceFingerprint current = ResourceFingerprint.of(new File(originFile));
+        return current == null || importedFingerprint.differsFrom(current);
+    }
+
+    /**
+     * The opposite of {@link #isOutdated()}: the file on disk is unchanged since import/save.
+     *
+     * @return true when the working copy still maps its file.
+     */
+    public boolean isCurrent() {
+        return !isOutdated();
     }
 
     /**
