@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -142,5 +143,22 @@ public class EditProjectNGTest {
         } catch (IllegalStateException expected) {
             assertTrue(expected.getMessage().contains("closed"));
         }
+    }
+
+    @Test(dependsOnMethods = "closedSessionRefusesAccess")
+    public void crossTabLinkResolutionFindsTheSharedNode() throws IOException, JsonParseException {
+        buildSharedFixture();
+        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+
+        // the A side resolves dep::5 - which lives in B's SHARED tree
+        final EditNodeAbstract hit = project.resolveLink("dep::5");
+        assertNotNull(hit, "the project-wide resolution must find the wood id across the tree border");
+        final EditTree bTree = project.findBySynonym("dep");
+        assertSame(bTree.getLinkingSet().getUnmodifiableObjectIdMap().get("dep::5"), hit,
+                "the hit IS B's tree's registered identity - the shared instance, not a copy");
+
+        // misses stay misses
+        assertNull(project.resolveLink("nosuch::1"), "unknown links resolve to null");
+        project.close();
     }
 }

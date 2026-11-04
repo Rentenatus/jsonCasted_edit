@@ -10,8 +10,7 @@ import de.jare.jsoncasted.io.JsonParseException;
 import de.jare.jsoncasted.io.convertservice.WoodElementResolver;
 import de.jare.jsoncasted.lang.JsonProject;
 import de.jare.jsoncasted.lang.JsonResource;
-import de.jare.jsoncasted.lang.JsonTerms;
-import java.io.File;
+import de.jare.jsoncasted.lang.JsonTerms;import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -184,6 +183,51 @@ public final class EditProject {
     public List<String> getSortedSynonyms() throws JsonParseException {
         requireOpen();
         return Collections.unmodifiableList(parseProject.getSortedSynonyms());
+    }
+
+    /**
+     * Resolves a synonym-qualified wood link across the session trees (concept doc/JSON_PROJECT.md,
+     * integration: cross-tab link resolution): the named provider's tree first - {@code dep::5} lives in B's
+     * linking set, so the A and E sides resolve into the SHARED B tree - then, as fallback, any tree's set
+     * (the local case and names the parse normalization keeps elsewhere). Tree-local resolution
+     * ({@link EditLinkingSet#findLinkTarget}) stays untouched; this is the project-wide seam on top.
+     *
+     * @param qualifiedLink the qualified link ({@code synonym::objectId}), not null.
+     * @return the linked node of the shared tree, or null when no session tree knows the link.
+     */
+    public EditNodeAbstract resolveLink(String qualifiedLink) {
+        requireOpen();
+        Objects.requireNonNull(qualifiedLink, "qualifiedLink must not be null");
+        EditNodeAbstract hit = resolveIn(treesBySynonym.get(providerOf(qualifiedLink)), qualifiedLink);
+        if (hit != null) {
+            return hit;
+        }
+        for (final EditTree tree : treesBySynonym.values()) {
+            hit = resolveIn(tree, qualifiedLink);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * One tree, both maps: the resolved link map first (the tree-local case), then the identity map - the
+     * cross-provider case the tree-local resolution deliberately leaves open (keys pointing at other providers
+     * are a case for the project, not the validator).
+     */
+    private static EditNodeAbstract resolveIn(EditTree tree, String qualifiedLink) {
+        if (tree == null || tree.getLinkingSet() == null) {
+            return null;
+        }
+        final EditLinkingSet set = tree.getLinkingSet();
+        final EditNodeAbstract resolved = set.findLinkTarget(qualifiedLink);
+        return resolved != null ? resolved : set.getUnmodifiableObjectIdMap().get(qualifiedLink);
+    }
+
+    private static String providerOf(String qualifiedLink) {
+        final int cut = qualifiedLink.indexOf(JsonTerms.COLONCOLON);
+        return cut > 0 ? qualifiedLink.substring(0, cut) : null;
     }
 
     /**
