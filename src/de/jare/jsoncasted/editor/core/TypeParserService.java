@@ -380,7 +380,7 @@ public class TypeParserService implements TypeParserListener {
             JsonTypeDescriptor rootType = editTree.getRootType();
             if (rootType != null) {
                 rootNode.setJsonType(rootType);
-                rootNode.setCastName(rootType.getTypeName());
+                rootNode.setCastNameInferred(rootType.getTypeName());
                 rootNode.markOkay(model);
                 typeAssigned = true;
             }
@@ -560,7 +560,7 @@ public class TypeParserService implements TypeParserListener {
             return; // field coverage confirms the inherited type - nothing to refine
         }
         node.setJsonType(inferred);
-        node.setCastName(inferred.getTypeName());
+        node.setCastNameInferred(inferred.getTypeName());
         node.markOkay(model);
 
         // Re-queue the node (the hash now includes cast and type) and its

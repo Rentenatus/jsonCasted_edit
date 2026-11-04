@@ -97,6 +97,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         String newName = name != null && name.startsWith(AnnotationKeys.PREFIX)
                 ? name.substring(AnnotationKeys.PREFIX.length()) : name;
         this.propName = newName;
+        markMerkleDirty(); // the property name is the member key of the diff projection
 
         // Notify parser listener about name change — this triggers
         // asynchronous re-parsing via the parse queue.
@@ -126,6 +127,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
         this.propName = propName.replace('=', ' ')
                 .trim()
                 .replace(' ', '_');
+        markMerkleDirty();
     }
 
     @Override
@@ -137,6 +139,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
     public void setValue(String value) {
         String oldValue = this.primValue;
         this.primValue = value;
+        markMerkleDirty(); // the prim value is the VALUE property of the diff projection
 
         // Notify parser listener about value change
         EditTree tree = getEditTree();
@@ -161,6 +164,7 @@ public non-sealed class EditNodeProperty extends EditNodeAbstract implements Edi
      */
     public void setType(JsonNodeType type) {
         this.type = type;
+        markMerkleDirty(); // the scalar type is the value tag of the diff projection
 
         // Notify parser listener about type change — this triggers
         // asynchronous re-parsing via the parse queue.

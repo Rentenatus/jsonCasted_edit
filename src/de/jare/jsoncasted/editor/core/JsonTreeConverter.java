@@ -102,7 +102,9 @@ public final class JsonTreeConverter {
         final EditTree retEditTree = convertRessourceToEditTree(resource, rootName);
 
         String descriptionFilePath = WoodElementResolver.extractDescriptionFilePath(resource);
-        File descriptionFile = new File(descriptionFilePath);
+        // a string import without a _woodModel reference carries no description path - the plain import
+        // (descriptor null) instead of the old new File(null) NullPointerException
+        File descriptionFile = descriptionFilePath != null ? new File(descriptionFilePath) : null;
         return loadDescrAndConvertRessourceToEditTree(retEditTree, descriptionFilePath, descriptionFile);
     }
 
@@ -156,7 +158,7 @@ public final class JsonTreeConverter {
                         // Wire the root type so the parser's root fallback can
                         // assign it when the root carries no cast name.
                         retEditTree.setRootType(rootType);
-                        rootObj.setCastName(rootType.getTypeName());
+                        rootObj.setCastNameInferred(rootType.getTypeName());
                     }
                 }
             }
@@ -179,6 +181,7 @@ public final class JsonTreeConverter {
         EditNodeAbstract root = importFromJsonNode(resource.getRoot(), rootName, weightMonitor, linkingSet);
         EditTree tree = new EditTree(root, weightMonitor);
         tree.setLinkingSet(linkingSet);
+        tree.adoptBaseSnapshot(resource); // G1: retain the import state as the merge base
         return tree;
     }
 

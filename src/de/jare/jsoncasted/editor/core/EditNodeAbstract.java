@@ -6,6 +6,10 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.diff.DifferableNode;
+import de.jare.jsoncasted.diff.MerkleHasher;
+import de.jare.jsoncasted.diff.NodeKind;
+import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.tools.SimpleStringSplitter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +24,7 @@ import java.util.Objects;
  *
  * @author Janusch Rentenatus
  */
-public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStringSplitter {
+public abstract non-sealed class EditNodeAbstract implements EditNode, DifferableNode, SimpleStringSplitter {
 
     /**
      * Default left range value for interval labeling.
@@ -69,6 +73,13 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      * node is not a reference.
      */
     private volatile String linkTarget;
+
+    /**
+     * Memoized Merkle subtree hash of the diff machinery (see doc/TREE_DIFF.md in jsonCasted). Kept strictly apart
+     * from the edit hash ({@link #lastParsedHash}): the Merkle hash is the subtree identity, comparable across
+     * parses; the edit hash stays the local reparse trigger. {@code null} means not yet computed or invalidated.
+     */
+    private volatile Long merkleHash;
 
     /**
      * Creates a new EditNodeAbstract with a generated edit ID. Initializes with
@@ -144,6 +155,15 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
     }
 
     /**
+     * The scalar value text of the diff projection. Declared here because EditNode carries a default getValue()
+     * while DifferableNode demands the method — the concrete kinds define their own value semantics.
+     *
+     * @return the raw value text, or {@code null}.
+     */
+    @Override
+    public abstract String getValue();
+
+    /**
      * Sets the edit message for this node.
      *
      * @param editMessage the edit message to set
@@ -209,6 +229,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      */
     public void setObjektId(String objektId) {
         this.objektId = objektId;
+        markMerkleDirty();
     }
 
     /**
@@ -227,6 +248,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      */
     public void setLinkTarget(String linkTarget) {
         this.linkTarget = linkTarget;
+        markMerkleDirty();
     }
 
     /**
@@ -237,6 +259,121 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
      */
     public boolean isLinkReference() {
         return linkTarget != null && !linkTarget.isEmpty();
+    }
+
+    // ========== DifferableNode: read-only semantic projection for the diff engine (see doc/TREE_DIFF.md) ==========
+
+    /**
+     * Returns the semantic node kind of the diff projection: object data is OBJECT (including primitive array
+     * rows, which are EditNodeObject instances holding their text in the object value), array properties — plain
+     * array properties and nested EditNodePropertyArr alike — are ARRAY, a property holding object data is
+     * PROPERTY, everything else (scalar properties) is VALUE. Annotations are parse feedback and never take part
+     * in a diff.
+     *
+     * @return the kind, never {@code null}.
+     */
+    @Override
+    public NodeKind getKind() {
+        if (this instanceof EditNodeObject) {
+            return NodeKind.OBJECT;
+        }
+        if (this instanceof EditNodeProperty prop) {
+            final JsonNodeType type = prop.getType();
+            if (type == JsonNodeType.ARRAY) {
+                return NodeKind.ARRAY;
+            }
+            if (type == JsonNodeType.OBJECT) {
+                return NodeKind.PROPERTY;
+            }
+        }
+        return NodeKind.VALUE;
+    }
+
+    /**
+     * Returns the member key of this node in its parent: a property is the keyed member of its parent object, so
+     * its key is its property name. Properties inside an array (nested array rows, scalar rows wrapped in
+     * properties) are positional — their name is not a member key, otherwise a reorder reports the same label for
+     * every row. Array rows and object data children have no member key.
+     *
+     * @return the property name for keyed members, else {@code null}.
+     */
+    @Override
+    public String getMemberKey() {
+        return this instanceof EditNodeProperty && getParent() instanceof EditNodeObject
+                ? getName() : null;
+    }
+
+    /**
+     * Returns the cast name ({@code _class} content) of object nodes; other kinds carry no cast.
+     *
+     * @return the cast name, or {@code null}.
+     */
+    @Override
+    public String getCastName() {
+        return this instanceof EditNodeObject ? ((EditNodeObject) this).getCastName() : null;
+    }
+
+    /**
+     * Returns the scalar type tag of this node ({@code string}, {@code long}, {@code number}, {@code boolean},
+     * {@code null}), or {@code null} for non-scalars. A type-only change is a VALUE change, never a no-op.
+     *
+     * @return the scalar type tag, or {@code null}.
+     */
+    @Override
+    public String getValueTag() {
+        if (this instanceof EditNodeProperty prop) {
+            final JsonNodeType type = prop.getType();
+            return type == null ? null : type.getName();
+        }
+        return null;
+    }
+
+    /**
+     * Returns the children of this node in the diff projection: ordered, annotations excluded — they are parse
+     * feedback, not content, and would otherwise turn editor state into diff noise.
+     *
+     * @return the projection children, never {@code null}.
+     */
+    @Override
+    public List<DifferableNode> children() {
+        final List<DifferableNode> result = new ArrayList<>(children.size());
+        for (EditNodeAbstract child : children) {
+            if (child instanceof EditNodeAnnotation) {
+                continue;
+            }
+            result.add(child);
+        }
+        return result;
+    }
+
+    /**
+     * Returns the memoized Merkle subtree hash, computing it bottom-up on first query (see
+     * {@link MerkleHasher#nodeHash}). Mutations invalidate the chain of the mutated node through
+     * {@link #markMerkleDirty()}, so the lazy recomputation is O(changed) per edit and O(depth) per node.
+     *
+     * @return the 64-bit Merkle hash of the subtree rooted at this node.
+     */
+    @Override
+    public long getMerkleHash() {
+        final Long cached = merkleHash;
+        if (cached != null) {
+            return cached;
+        }
+        final long hash = MerkleHasher.nodeHash(this); // children hash lazily through this call
+        merkleHash = hash;
+        return hash;
+    }
+
+    /**
+     * Invalidates the memoized Merkle hash of this node and of all its ancestors — O(depth). Called by every
+     * content or structure mutation, so a later {@link #getMerkleHash()} recomputes exactly the dirty chain.
+     */
+    protected void markMerkleDirty() {
+        EditNodeAbstract node = this;
+        while (node != null) {
+            node.merkleHash = null;
+            node = node.parent;
+        }
     }
 
     /**
@@ -483,6 +620,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
         }
         children.add(index, child);
         child.setParent(this);
+        markMerkleDirty(); // the parent's subtree hash changes with every structural edit
 
         // Setze die Tree-Referenz für das Kind, falls diese Node sie hat
         if (editTree != null) {
@@ -677,6 +815,7 @@ public abstract non-sealed class EditNodeAbstract implements EditNode, SimpleStr
                 // Notify child that it was removed
                 child.sayOnRemoved(this);
             }
+            markMerkleDirty();
         }
         return removed;
     }
