@@ -164,7 +164,7 @@ public abstract class AbstractEditCommand implements EditCommand {
                 lastFailedCount = result.getTemplateEntries().length;
                 lastMessage = result.getMessageKey();
             } else {
-                // the working-copy axis of doc/JSON_PROJECT.md: a mutating command leaves EDITED - conservatively,
+                // the working-copy axis of doc/JSON_BUNDLE.md: a mutating command leaves EDITED - conservatively,
                 // a false EDITED never loses work, a false CLEAN would; DISALLOWED mutates nothing
                 tree.markEdited();
             }
@@ -198,7 +198,7 @@ public abstract class AbstractEditCommand implements EditCommand {
             lastAction = result.getAction();
             lastUpdatedCount = result.getUpdatedNodes().length;
             lastFailedCount = result.getFailedNodes().length;
-            // undo changes memory away from the saved state too (concept doc/JSON_PROJECT.md) - unless it lands
+            // undo changes memory away from the saved state too (concept doc/JSON_BUNDLE.md) - unless it lands
             // exactly on it, which only the next save or a diff can prove; conservative EDITED either way
             tree.markEdited();
         }

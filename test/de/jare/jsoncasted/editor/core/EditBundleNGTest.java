@@ -23,19 +23,19 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 /**
- * The session clamp of doc/JSON_PROJECT.md (doc/PLAN_JsonProject.md phase 3): EditProject converts every
- * resource of ONE JsonProject load exactly once into an EditTree - B exists as a single EditTree shared by
+ * The session clamp of doc/JSON_BUNDLE.md (doc/PLAN_JsonBundle.md phase 3): EditBundle converts every
+ * resource of ONE JsonBundle load exactly once into an EditTree - B exists as a single EditTree shared by
  * the A and E sides. Fixtures: the A/E/B constellation of the registry tests (temp files).
  *
  * @author Janusch Rentenatus
  */
-public class EditProjectNGTest {
+public class EditBundleNGTest {
 
     private static Path tempDir;
 
     @BeforeClass
     public static void createTempDir() throws IOException {
-        tempDir = Files.createTempDirectory("editproject-session");
+        tempDir = Files.createTempDirectory("editbundle-session");
     }
 
     @AfterClass
@@ -82,63 +82,63 @@ public class EditProjectNGTest {
     @Test
     public void openConvertsEachResourceExactlyOnce() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
 
-        assertNotNull(project.getMainTree(), "the main tree exists");
-        assertEquals(project.getSortedSynonyms().size(), 4, "self, subA, subE, dep");
-        assertNotNull(project.findBySynonym("subA"), "A converted once, findable");
-        assertNotNull(project.findBySynonym("dep"), "B converted once, findable");
-        project.close();
+        assertNotNull(bundle.getMainTree(), "the main tree exists");
+        assertEquals(bundle.getSortedSynonyms().size(), 4, "self, subA, subE, dep");
+        assertNotNull(bundle.findBySynonym("subA"), "A converted once, findable");
+        assertNotNull(bundle.findBySynonym("dep"), "B converted once, findable");
+        bundle.close();
     }
 
     @Test(dependsOnMethods = "openConvertsEachResourceExactlyOnce")
     public void bIsOneEditTreeForBothConsumers() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
 
-        final EditTree bTree = project.findBySynonym("dep");
+        final EditTree bTree = bundle.findBySynonym("dep");
         assertNotNull(bTree, "B's tree exists");
         final File bFile = new File(bTree.getBaseSnapshot().getResourceFile());
-        assertSame(project.findByPath(bFile.getCanonicalPath()), bTree,
+        assertSame(bundle.findByPath(bFile.getCanonicalPath()), bTree,
                 "B == B' on the session side too - one EditTree shared by A and E");
-        project.close();
+        bundle.close();
     }
 
     @Test(dependsOnMethods = "bIsOneEditTreeForBothConsumers")
     public void sessionTreesStandOnTheParseLayersSharedInstances() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
 
-        final EditTree bTree = project.findBySynonym("dep");
-        assertSame(bTree.getBaseSnapshot(), project.getParseProject().findBySynonym("dep"),
+        final EditTree bTree = bundle.findBySynonym("dep");
+        assertSame(bTree.getBaseSnapshot(), bundle.getParseBundle().findBySynonym("dep"),
                 "the edit layer consumes the parse layer's SHARED instance - no second parse anywhere");
         assertFalse(bTree.isEdited(), "the fresh conversion is CLEAN");
         assertTrue(bTree.isCurrent(), "and CURRENT - the adopted fingerprint matches the file");
-        project.close();
+        bundle.close();
     }
 
     @Test(dependsOnMethods = "sessionTreesStandOnTheParseLayersSharedInstances")
     public void editOnOneTreeIsTheEditTextsOwnState() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
 
-        for (final EditTree tree : new EditTree[]{project.getMainTree(),
-            project.findBySynonym("subA"), project.findBySynonym("subE"),
-            project.findBySynonym("dep")}) {
+        for (final EditTree tree : new EditTree[]{bundle.getMainTree(),
+            bundle.findBySynonym("subA"), bundle.findBySynonym("subE"),
+            bundle.findBySynonym("dep")}) {
             assertFalse(tree.isEdited(), "nothing touched - CLEAN");
             assertTrue(tree.isCurrent(), "no file changed - CURRENT");
         }
-        project.close();
+        bundle.close();
     }
 
     @Test(dependsOnMethods = "editOnOneTreeIsTheEditTextsOwnState")
     public void closedSessionRefusesAccess() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
-        project.close();
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
+        bundle.close();
 
         try {
-            project.findBySynonym("dep");
+            bundle.findBySynonym("dep");
             fail("a closed session must refuse registry access");
         } catch (IllegalStateException expected) {
             assertTrue(expected.getMessage().contains("closed"));
@@ -148,17 +148,17 @@ public class EditProjectNGTest {
     @Test(dependsOnMethods = "closedSessionRefusesAccess")
     public void crossTabLinkResolutionFindsTheSharedNode() throws IOException, JsonParseException {
         buildSharedFixture();
-        final EditProject project = EditProject.open(tempDir.resolve("P.json").toFile());
+        final EditBundle bundle = EditBundle.open(tempDir.resolve("P.json").toFile());
 
         // the A side resolves dep::5 - which lives in B's SHARED tree
-        final EditNodeAbstract hit = project.resolveLink("dep::5");
-        assertNotNull(hit, "the project-wide resolution must find the wood id across the tree border");
-        final EditTree bTree = project.findBySynonym("dep");
+        final EditNodeAbstract hit = bundle.resolveLink("dep::5");
+        assertNotNull(hit, "the bundle-wide resolution must find the wood id across the tree border");
+        final EditTree bTree = bundle.findBySynonym("dep");
         assertSame(bTree.getLinkingSet().getUnmodifiableObjectIdMap().get("dep::5"), hit,
                 "the hit IS B's tree's registered identity - the shared instance, not a copy");
 
         // misses stay misses
-        assertNull(project.resolveLink("nosuch::1"), "unknown links resolve to null");
-        project.close();
+        assertNull(bundle.resolveLink("nosuch::1"), "unknown links resolve to null");
+        bundle.close();
     }
 }

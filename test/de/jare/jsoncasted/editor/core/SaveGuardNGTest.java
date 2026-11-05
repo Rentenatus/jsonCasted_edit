@@ -16,7 +16,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 /**
- * The save guard quadrant of doc/JSON_PROJECT.md: the two EditTree axes map onto the four decisions before
+ * The save guard quadrant of doc/JSON_BUNDLE.md: the two EditTree axes map onto the four decisions before
  * overwriting a file. The conflict quadrant (EDITED + OUTDATED) never resolves automatically - it is the 3-way
  * case with the base available for free.
  *
@@ -28,7 +28,7 @@ public class SaveGuardNGTest {
 
     @BeforeClass
     public static void createTempDir() throws IOException {
-        tempDir = Files.createTempDirectory("editproject-saveguard");
+        tempDir = Files.createTempDirectory("editbundle-saveguard");
     }
 
     @AfterClass

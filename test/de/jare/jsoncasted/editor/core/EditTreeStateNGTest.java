@@ -24,7 +24,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 /**
- * The edit-layer state model of doc/JSON_PROJECT.md on the EditTree itself: the working-copy axis CLEAN/EDITED
+ * The edit-layer state model of doc/JSON_BUNDLE.md on the EditTree itself: the working-copy axis CLEAN/EDITED
  * (first dirty tracking for editor trees - the command funnels flag, the save clears) and the file-currency axis
  * CURRENT/OUTDATED (the adopted import fingerprint against the file as it is now). Vocabulary boundaries hold:
  * STALE is the parse layer's word, hard/soft parse is no lifecycle dimension.
@@ -37,7 +37,7 @@ public class EditTreeStateNGTest {
 
     @BeforeClass
     public static void createTempDir() throws IOException {
-        tempDir = Files.createTempDirectory("editproject-state");
+        tempDir = Files.createTempDirectory("editbundle-state");
     }
 
     @AfterClass

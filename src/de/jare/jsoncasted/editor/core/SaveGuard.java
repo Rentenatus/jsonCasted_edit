@@ -8,7 +8,7 @@ package de.jare.jsoncasted.editor.core;
 import java.util.Objects;
 
 /**
- * The save guard of doc/JSON_PROJECT.md (edit layer): the quadrant decision before overwriting a file. The
+ * The save guard of doc/JSON_BUNDLE.md (edit layer): the quadrant decision before overwriting a file. The
  * two axes of the {@link EditTree} decide - the working-copy axis (CLEAN/EDITED) and the file-currency axis
  * (CURRENT/OUTDATED), compared against the file's fingerprint state:
  *

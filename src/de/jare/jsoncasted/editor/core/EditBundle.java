@@ -8,7 +8,7 @@ package de.jare.jsoncasted.editor.core;
 import de.jare.debug.JsonDebugLevel;
 import de.jare.jsoncasted.io.JsonParseException;
 import de.jare.jsoncasted.io.convertservice.WoodElementResolver;
-import de.jare.jsoncasted.lang.JsonProject;
+import de.jare.jsoncasted.lang.JsonBundle;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;import java.io.File;
 import java.io.IOException;
@@ -19,55 +19,55 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The session clamp of doc/JSON_PROJECT.md (doc/PLAN_JsonProject.md phase 3): the edit layer's registry
- * {@code {canonical path, synonym} -> EditTree}, exactly parallel to the parse layer. One {@link JsonProject}
+ * The session clamp of doc/JSON_BUNDLE.md (doc/PLAN_JsonBundle.md phase 3): the edit layer's registry
+ * {@code {canonical path, synonym} -> EditTree}, exactly parallel to the parse layer. One {@link JsonBundle}
  * load provides the resource graph; every {@link JsonResource} is converted exactly ONCE into an
  * {@link EditTree} - B then exists as a single EditTree shared by the A and E tabs, the session-side twin of
  * the parse layer's {@code B == B'}.
  *
  * <p>
- * Two clamps, two truths (concept): the {@code JsonProject} owns the file truth (fingerprints, reload,
+ * Two clamps, two truths (concept): the {@code JsonBundle} owns the file truth (fingerprints, reload,
  * consumption), this class owns the session truth (the editable trees and their state axes). The state lives on
- * the {@link EditTree} itself (CLEAN/EDITED, CURRENT/OUTDATED) - the project only aggregates.
+ * the {@link EditTree} itself (CLEAN/EDITED, CURRENT/OUTDATED) - the bundle only aggregates.
  * </p>
  *
  * @author Janusch Rentenatus
  */
-public final class EditProject {
+public final class EditBundle {
 
-    private final JsonProject parseProject;
+    private final JsonBundle parseBundle;
     private final EditTree mainTree;
     private final Map<String, EditTree> treesByPath = new LinkedHashMap<>();
     private final Map<String, EditTree> treesBySynonym = new LinkedHashMap<>();
     private boolean closed;
 
     /**
-     * Opens the editor session of a project main file: one parse-layer project load, one conversion per
+     * Opens the editor session of a bundle main file: one parse-layer bundle load, one conversion per
      * resource. The main tree builds on the same rails as a plain file import (description file, descriptor,
      * root type), the sub trees convert without their own descriptor.
      *
-     * @param mainFile the project's main resource file, not null.
-     * @return the open edit project.
+     * @param mainFile the bundle's main resource file, not null.
+     * @return the open edit bundle.
      * @throws IOException if a file cannot be read.
      * @throws JsonParseException if parsing or an identity rule fails.
      */
-    public static EditProject open(File mainFile) throws IOException, JsonParseException {
+    public static EditBundle open(File mainFile) throws IOException, JsonParseException {
         Objects.requireNonNull(mainFile, "mainFile must not be null");
-        final JsonProject parse = JsonProject.open(mainFile, JsonDebugLevel.SIMPLE);
+        final JsonBundle parse = JsonBundle.open(mainFile, JsonDebugLevel.SIMPLE);
         try {
-            return new EditProject(parse);
+            return new EditBundle(parse);
         } catch (IOException | JsonParseException | RuntimeException ex) {
             parse.close();
             throw ex;
         }
     }
 
-    private EditProject(JsonProject parseProject) throws IOException, JsonParseException {
-        this.parseProject = parseProject;
-        this.mainTree = convertMain(parseProject.getMainResource());
-        register(resolveMainSynonym(parseProject), mainTree);
-        for (String synonym : parseProject.getSortedSynonyms()) {
-            final JsonResource resource = parseProject.findBySynonym(synonym);
+    private EditBundle(JsonBundle parseBundle) throws IOException, JsonParseException {
+        this.parseBundle = parseBundle;
+        this.mainTree = convertMain(parseBundle.getMainResource());
+        register(resolveMainSynonym(parseBundle), mainTree);
+        for (String synonym : parseBundle.getSortedSynonyms()) {
+            final JsonResource resource = parseBundle.findBySynonym(synonym);
             if (resource == null || treesBySynonym.containsKey(synonym)) {
                 continue;
             }
@@ -78,9 +78,9 @@ public final class EditProject {
     }
 
     /**
-     * The main conversion on the plain import rails - the project's main tree behaves exactly like a
+     * The main conversion on the plain import rails - the bundle's main tree behaves exactly like a
      * fromJsonFile import (description file and descriptor included), only that the parse comes from the
-     * project's shared instance.
+     * bundle's shared instance.
      */
     private static EditTree convertMain(JsonResource mainResource) throws IOException, JsonParseException {
         final String rootName = displayNameOf(mainResource);
@@ -109,8 +109,8 @@ public final class EditProject {
         return providerName;
     }
 
-    private String resolveMainSynonym(JsonProject parseProject) {
-        final String providerName = parseProject.getMainResource().getProviderName();
+    private String resolveMainSynonym(JsonBundle parseBundle) {
+        final String providerName = parseBundle.getMainResource().getProviderName();
         return providerName != null ? providerName : JsonTerms.SELF_SYNONYM;
     }
 
@@ -134,7 +134,7 @@ public final class EditProject {
     }
 
     /**
-     * Returns the session's main tree - the tab identity of the project main file.
+     * Returns the session's main tree - the tab identity of the bundle main file.
      *
      * @return the main tree, not null while open.
      */
@@ -146,7 +146,7 @@ public final class EditProject {
      * Returns the shared session tree of a provider synonym - the tree every tab of that resource edits.
      *
      * @param synonym the provider synonym, not null.
-     * @return the shared EditTree, or null when the project holds no such synonym.
+     * @return the shared EditTree, or null when the bundle holds no such synonym.
      */
     public EditTree findBySynonym(String synonym) {
         requireOpen();
@@ -157,7 +157,7 @@ public final class EditProject {
      * Returns the shared session tree of a canonical file path.
      *
      * @param canonicalPath the file's canonical path, not null.
-     * @return the shared EditTree, or null when the project holds no such file.
+     * @return the shared EditTree, or null when the bundle holds no such file.
      */
     public EditTree findByPath(String canonicalPath) {
         requireOpen();
@@ -165,32 +165,32 @@ public final class EditProject {
     }
 
     /**
-     * Returns the parse-layer project this session was opened from - the file truth behind the session truth.
+     * Returns the parse-layer bundle this session was opened from - the file truth behind the session truth.
      *
-     * @return the parse project, not null while open.
+     * @return the parse bundle, not null while open.
      */
-    public JsonProject getParseProject() {
+    public JsonBundle getParseBundle() {
         requireOpen();
-        return parseProject;
+        return parseBundle;
     }
 
     /**
-     * Returns the synonyms of the session in the parse project's topological order (dependencies first).
+     * Returns the synonyms of the session in the parse bundle's topological order (dependencies first).
      *
      * @return unmodifiable sorted synonym list, not null.
-     * @throws JsonParseException when the parse project's provider graph contains a cycle.
+     * @throws JsonParseException when the parse bundle's provider graph contains a cycle.
      */
     public List<String> getSortedSynonyms() throws JsonParseException {
         requireOpen();
-        return Collections.unmodifiableList(parseProject.getSortedSynonyms());
+        return Collections.unmodifiableList(parseBundle.getSortedSynonyms());
     }
 
     /**
-     * Resolves a synonym-qualified wood link across the session trees (concept doc/JSON_PROJECT.md,
+     * Resolves a synonym-qualified wood link across the session trees (concept doc/JSON_BUNDLE.md,
      * integration: cross-tab link resolution): the named provider's tree first - {@code dep::5} lives in B's
      * linking set, so the A and E sides resolve into the SHARED B tree - then, as fallback, any tree's set
      * (the local case and names the parse normalization keeps elsewhere). Tree-local resolution
-     * ({@link EditLinkingSet#findLinkTarget}) stays untouched; this is the project-wide seam on top.
+     * ({@link EditLinkingSet#findLinkTarget}) stays untouched; this is the bundle-wide seam on top.
      *
      * @param qualifiedLink the qualified link ({@code synonym::objectId}), not null.
      * @return the linked node of the shared tree, or null when no session tree knows the link.
@@ -214,7 +214,7 @@ public final class EditProject {
     /**
      * One tree, both maps: the resolved link map first (the tree-local case), then the identity map - the
      * cross-provider case the tree-local resolution deliberately leaves open (keys pointing at other providers
-     * are a case for the project, not the validator).
+     * are a case for the bundle, not the validator).
      */
     private static EditNodeAbstract resolveIn(EditTree tree, String qualifiedLink) {
         if (tree == null || tree.getLinkingSet() == null) {
@@ -236,13 +236,13 @@ public final class EditProject {
     public void close() {
         treesByPath.clear();
         treesBySynonym.clear();
-        parseProject.close();
+        parseBundle.close();
         closed = true;
     }
 
     private void requireOpen() {
         if (closed) {
-            throw new IllegalStateException("The edit project is closed");
+            throw new IllegalStateException("The edit bundle is closed");
         }
     }
 }

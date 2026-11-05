@@ -826,7 +826,7 @@ public class EditTree {
      */
     private JsonResource baseSnapshot;
 
-    // State model of doc/JSON_PROJECT.md, edit layer - deliberately separate vocabulary from the parse layer:
+    // State model of doc/JSON_BUNDLE.md, edit layer - deliberately separate vocabulary from the parse layer:
     // the working-copy axis CLEAN/EDITED (unsaved changes in memory - the first dirty tracking for editor trees;
     // STALE of the parse layer means an outdated cached parse, never this) and the file-currency axis
     // CURRENT/OUTDATED (the origin file changed externally; the working copy detached from the file state).
@@ -840,7 +840,7 @@ public class EditTree {
 
     /**
      * Derives the origin fingerprint for adoption: the resource's captured load state when it has one (the
-     * project capture), else a fresh capture from the resource's file (standalone import).
+     * bundle capture), else a fresh capture from the resource's file (standalone import).
      */
     private static ResourceFingerprint originFingerprintOf(JsonResource resource) {
         if (resource == null) {
@@ -895,7 +895,7 @@ public class EditTree {
     }
 
     /**
-     * Working-copy axis (concept doc/JSON_PROJECT.md, edit layer): true when unsaved user changes are in memory.
+     * Working-copy axis (concept doc/JSON_BUNDLE.md, edit layer): true when unsaved user changes are in memory.
      * Conservative direction: any executed, undone or redone command after the last save counts until the next
      * save or an explicit {@link #markClean()} - a false EDITED never loses work, a false CLEAN would.
      *
@@ -922,7 +922,7 @@ public class EditTree {
     }
 
     /**
-     * File-currency axis (concept doc/JSON_PROJECT.md, edit layer): true when the origin file changed externally
+     * File-currency axis (concept doc/JSON_BUNDLE.md, edit layer): true when the origin file changed externally
      * since the import/save - the working copy is detached from the file state (OUTDATED, never called STALE -
      * that word belongs to the parse layer). Trees without origin file (in-memory, string imports) cannot
      * detach: they stay CURRENT. A vanished origin file counts as OUTDATED - the save guard must not blindly
