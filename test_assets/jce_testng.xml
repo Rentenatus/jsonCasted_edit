@@ -47,6 +47,7 @@
     <class name="de.jare.jsoncasted.editor.core.validation.ValidationContextNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.validation.WoodLinkValidatorNGTest"/>
     <class name="de.jare.jsoncasted.editor.merge.EditTreeMergerNGTest"/>
+    <class name="de.jare.jsoncasted.editor.merge.PickIdentityTranslationNGTest"/>
     </classes>
   </test>
 </suite>
