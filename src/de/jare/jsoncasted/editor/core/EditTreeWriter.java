@@ -5,6 +5,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonNodeType;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import java.io.File;
@@ -39,6 +40,7 @@ public final class EditTreeWriter {
         final StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         writeWoodModel(tree, sb);
+        writeWoodProviders(tree, sb);
         writeWoodDefinitions(tree, sb);
         writeObjectMembers((EditNodeObject) tree.getRoot(), 1, sb);
         sb.append("}\n");
@@ -113,6 +115,73 @@ public final class EditTreeWriter {
      * @param tree the edit tree
      * @param sb the target buffer
      */
+    /**
+     * Writes the captured {@code _woodProviders} member of the tree - the file level wiring metadata the
+     * import keeps verbatim (the fix of the provider round trip gap: a save may never strip the bundle
+     * wiring). The entries serialize in the flat member style of the wood writer: every entry one line
+     * with its scalar members.
+     *
+     * @param tree the edit tree
+     * @param sb the target buffer
+     */
+    private static void writeWoodProviders(EditTree tree, StringBuilder sb) {
+        final JsonNode providers = tree.getProvidersNode();
+        final List<JsonNode> entries = providers != null ? providers.asArray() : null;
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        sb.append(INDENT).append("\"_woodProviders\": [\n");
+        boolean first = true;
+        for (JsonNode entry : entries) {
+            if (!first) {
+                sb.append(",\n");
+            }
+            first = false;
+            sb.append(INDENT).append(INDENT).append("{ ");
+            final Map<String, JsonNode> members = entry.asObjectValues();
+            boolean memberFirst = true;
+            if (members != null) {
+                for (Map.Entry<String, JsonNode> member : members.entrySet()) {
+                    if (!memberFirst) {
+                        sb.append(", ");
+                    }
+                    memberFirst = false;
+                    sb.append("\"");
+                    escape(member.getKey(), sb);
+                    sb.append("\": ");
+                    writeProviderMemberValue(member.getValue(), sb);
+                }
+            }
+            sb.append(" }");
+        }
+        sb.append("\n").append(INDENT).append("],\n");
+    }
+
+    /**
+     * One member value of a provider entry: scalars serialize in their JSON type (strings quoted and
+     * escaped, numbers and booleans raw). A nested value cannot appear in the provider model
+     * (synonym, filename - both strings); if a file still carries one, it is written as its text so
+     * the entry stays visible and diagnosable instead of silently dropped.
+     *
+     * @param value the provider member value
+     * @param sb the target buffer
+     */
+    private static void writeProviderMemberValue(JsonNode value, StringBuilder sb) {
+        if (value == null) {
+            sb.append("null");
+            return;
+        }
+        switch (value.getType() == null ? JsonNodeType.STRING : value.getType()) {
+            case LONG, NUMBER -> sb.append(value.asText());
+            case BOOLEAN -> sb.append(Boolean.TRUE.equals(value.asBoolean()) ? "true" : "false");
+            default -> {
+                sb.append("\"");
+                escape(value.asText(), sb);
+                sb.append("\"");
+            }
+        }
+    }
+
     private static void writeWoodDefinitions(EditTree tree, StringBuilder sb) {
         final EditLinkingSet linkingSet = tree.getLinkingSet();
         if (linkingSet == null) {

@@ -22,6 +22,7 @@ import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_LINK;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_MODEL;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_OBJECT_ID;
 import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
+import static de.jare.jsoncasted.lang.JsonTerms.TERM_WOOD_PROVIDERS;
 import de.jare.jsoncasted.model.JsonBuildException;
 import de.jare.jsoncasted.model.descriptor.JsonModelDescriptor;
 import de.jare.jsoncasted.model.descriptor.JsonTypeDescriptor;
@@ -182,7 +183,24 @@ public final class JsonTreeConverter {
         EditTree tree = new EditTree(root, weightMonitor);
         tree.setLinkingSet(linkingSet);
         tree.adoptBaseSnapshot(resource); // G1: retain the import state as the merge base
+        // The provider round trip fix (concept CONCEPT_ProjectView.md): the root's _woodProviders member is
+        // file level metadata without editable representation - captured here, written back on save.
+        final JsonNode providers = providersOf(resource.getRoot());
+        if (providers != null) {
+            tree.setProvidersNode(providers);
+        }
         return tree;
+    }
+
+    /**
+     * The {@code _woodProviders} member of a root, or {@code null} when the root carries none.
+     *
+     * @param root the parsed root node
+     * @return the providers member, or {@code null}
+     */
+    private static JsonNode providersOf(JsonNode root) {
+        final Map<String, JsonNode> members = root != null ? root.asObjectValues() : null;
+        return members != null ? members.get(TERM_WOOD_PROVIDERS) : null;
     }
 
     /**

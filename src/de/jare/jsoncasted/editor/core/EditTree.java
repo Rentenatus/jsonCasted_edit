@@ -6,6 +6,7 @@
  */
 package de.jare.jsoncasted.editor.core;
 
+import de.jare.jsoncasted.lang.JsonNode;
 import de.jare.jsoncasted.lang.JsonResource;
 import de.jare.jsoncasted.lang.JsonTerms;
 import de.jare.jsoncasted.lang.ResourceFingerprint;
@@ -31,6 +32,11 @@ public class EditTree {
     private final EditTimes weightMonitor;
     private EditProviderBox expectedBox;
     private EditLinkingSet linkingSet;
+    // File level metadata that has no editable representation in the tree: the root's _woodProviders
+    // member captured at import (concept CONCEPT_ProjectView.md, fix of the provider round trip).
+    // The editor keeps it verbatim and EditTreeWriter writes it back on save - a save may never
+    // silently strip the bundle wiring of a file.
+    private JsonNode providersNode;
     private String descriptionFilePath;
     private String providerName = JsonTerms.THIS_SYNONYM;
     private ParseMode parseMode = ParseMode.SOFT_PARSE;
@@ -807,6 +813,27 @@ public class EditTree {
 
     public EditLinkingSet getLinkingSet() {
         return linkingSet;
+    }
+
+    /**
+     * Returns the captured {@code _woodProviders} member of the import root - file level metadata the
+     * editor preserves verbatim because it has no editable representation (the fix of the provider
+     * round trip gap: a save must not strip the bundle wiring of a file).
+     *
+     * @return the providers member of the imported root, or {@code null} when the file has none.
+     */
+    public JsonNode getProvidersNode() {
+        return providersNode;
+    }
+
+    /**
+     * Sets the captured {@code _woodProviders} member (the import converter installs the one found
+     * in the parsed root; a later reroll of provider synonyms may replace it wholesale).
+     *
+     * @param providersNode the providers member, or {@code null} to clear.
+     */
+    public void setProvidersNode(JsonNode providersNode) {
+        this.providersNode = providersNode;
     }
 
     /**

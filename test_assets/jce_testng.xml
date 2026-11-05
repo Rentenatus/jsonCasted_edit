@@ -32,6 +32,7 @@
     <class name="de.jare.jsoncasted.editor.core.EditStringEvaluatorNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.EditTreeStateNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.EditTreeWriterNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditTreeWriterProvidersNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.ElementTypePropagationNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.OnTheFlyParserHardeningNGTest"/>
     <class name="de.jare.jsoncasted.editor.core.ParserSleepsNGTest"/>
