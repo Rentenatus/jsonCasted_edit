@@ -2,7 +2,7 @@
     "_woodProviders": [
       {
         "synonym": "save",
-        "filename": "./assets/config/testboxSave_2.json"
+        "filename": "./testboxSave_2.json"
       }
     ],
     "subsub": {

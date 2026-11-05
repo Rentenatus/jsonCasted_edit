@@ -16,6 +16,7 @@
   <test name="JsonCastedEditTests">
     <classes>
     <class name="de.jare.jsoncasted.editor.RenameNodeCommandNGTest"/>
+    <class name="de.jare.jsoncasted.editor.RerollCommandsNGTest"/>
     <class name="de.jare.jsoncasted.editor.SetNodeValueCommandNGTest"/>
     <class name="de.jare.jsoncasted.editor.TreeEditorArraysNGTest"/>
     <class name="de.jare.jsoncasted.editor.TreeEditorContentNGTest"/>

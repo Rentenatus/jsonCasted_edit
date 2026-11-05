@@ -125,6 +125,24 @@ public final class EditBundle {
         }
     }
 
+    /**
+     * Renames the session registration of a tree (the reroll of provider synonyms, concept
+     * CONCEPT_ProjectView.md section 7.1): the tree answers to the new synonym from now on; the
+     * path registration stays (the file did not move). Called only from the reroll transaction.
+     *
+     * @param oldSynonym the synonym the tree answered to
+     * @param newSynonym the rerolled synonym
+     */
+    public void relabelSynonym(String oldSynonym, String newSynonym) {
+        if (oldSynonym == null || oldSynonym.isBlank() || newSynonym == null || newSynonym.isBlank()) {
+            return;
+        }
+        final EditTree tree = treesBySynonym.remove(oldSynonym);
+        if (tree != null) {
+            treesBySynonym.put(newSynonym, tree);
+        }
+    }
+
     private static String canonicalOf(String filename) {
         try {
             return new File(filename).getCanonicalPath();
