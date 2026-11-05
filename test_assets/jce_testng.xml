@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+  The TestNG suite of jsonCasted_edit (the run recipe of the repository).
+
+  The tests resolve their asset files relative to the working directory, so run it from
+  THIS directory (test_assets):
+
+      cd test_assets
+      java -cp <test classes>;<main classes>;<jsonCasted classes>;<testng jars> org.testng.TestNG jce_testng.xml
+
+  The asset tree lives here: assets/config. TypeParserServiceNGTest needs it - from the
+  repository root the class would fail its configuration silently and skip all tests.
+-->
+<suite name="JsonCastedEditSuite">
+  <test name="JsonCastedEditTests">
+    <classes>
+    <class name="de.jare.jsoncasted.editor.RenameNodeCommandNGTest"/>
+    <class name="de.jare.jsoncasted.editor.SetNodeValueCommandNGTest"/>
+    <class name="de.jare.jsoncasted.editor.TreeEditorArraysNGTest"/>
+    <class name="de.jare.jsoncasted.editor.TreeEditorContentNGTest"/>
+    <class name="de.jare.jsoncasted.editor.WoodLinkCommandNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.AnnotationBindingNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.ArrayWoodIdRoundTripNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.DescriptionRoundTripNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditBundleNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditLinkingSetNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditNodeAbstractNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditNodeCoreNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditNodeDiffNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditNodePropertyUniqueNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditStringEvaluatorNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditTreeStateNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.EditTreeWriterNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.ElementTypePropagationNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.OnTheFlyParserHardeningNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.ParserSleepsNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.SaveGuardNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.TypeParserServiceNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.WoodLinkImportNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.WoodLinkRoundTripNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.validation.EditStringAnnotationValidatorNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.validation.EditValidationResultNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.validation.EditValidationRunnerNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.validation.ValidationContextNGTest"/>
+    <class name="de.jare.jsoncasted.editor.core.validation.WoodLinkValidatorNGTest"/>
+    <class name="de.jare.jsoncasted.editor.merge.EditTreeMergerNGTest"/>
+    </classes>
+  </test>
+</suite>
