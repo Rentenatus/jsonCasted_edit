@@ -50,7 +50,7 @@ public class RerollCommandsNGTest {
         assertNotNull(ref, "the fixture carries a reference to box::5");
 
         final BundleReroller.RerollPlan plan = BundleReroller.plan(
-                setOf("5"), setOf("box"), Set.of(), setOf("box::5"), new ArrayList<>());
+                setOf("5"), setOf("box"), Set.of(), setOf("box::5"), new ArrayList<>(), true, true);
         assertFalse(plan.isRefused(), "the fixture plan computes: " + plan.getProblems());
 
         final List<EditCommand> commands = new ArrayList<>();
